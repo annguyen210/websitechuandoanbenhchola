@@ -1,4 +1,4 @@
-# LeafCare AI
+# LeafAI
 
 Repo deploy: `websitechuandoanbenhchola`
 
