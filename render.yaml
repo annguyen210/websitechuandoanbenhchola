@@ -2,7 +2,7 @@ services:
   - type: web
     name: websitechuandoanbenhchola
     runtime: python
-    plan: starter
+    plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn app:app
     healthCheckPath: /api/health

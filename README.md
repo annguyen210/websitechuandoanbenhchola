@@ -59,6 +59,13 @@ Project da co san `render.yaml` va `.python-version`.
 4. Khi Render hoi secret, nhap `OPENAI_API_KEY`.
 5. Sau khi deploy xong, kiem tra `/api/health`.
 
+### Free tier
+
+- `render.yaml` da duoc dat san `plan: free`
+- Free web service se sleep sau 15 phut khong co traffic
+- Free tier khong phu hop production
+- File upload local co the mat sau restart/redeploy
+
 ### Bao mat
 
 - `.env` da duoc ignore, khong push len GitHub.
