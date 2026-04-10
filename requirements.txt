@@ -1,9 +1,12 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+torchvision
 Flask
 python-dotenv
 Pillow
 numpy
 h5py
-tensorflow
+tensorflow-cpu
 ultralytics
 opencv-python-headless
 openai
