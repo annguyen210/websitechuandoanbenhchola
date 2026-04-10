@@ -21,6 +21,8 @@ class CnnClassificationService:
         try:
             import numpy as np
             import tensorflow as tf
+            tf.config.threading.set_inter_op_parallelism_threads(1)
+            tf.config.threading.set_intra_op_parallelism_threads(1)
         except Exception:
             return None, None
         return np, tf
