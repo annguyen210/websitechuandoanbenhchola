@@ -176,9 +176,28 @@ async function analyzeImage() {
       method: "POST",
       body: formData,
     });
+
+    if (!response.ok) {
+      const text = await response.text();
+      let message = `Lỗi máy chủ: ${response.status}`;
+
+      try {
+        const payload = JSON.parse(text);
+        if (payload?.error) {
+          message = payload.error;
+        }
+      } catch {
+        if (text) {
+          message = text;
+        }
+      }
+
+      throw new Error(message);
+    }
+
     const payload = await response.json();
 
-    if (!response.ok || !payload.success) {
+    if (!payload.success) {
       throw new Error(payload.error || "Không thể phân tích ảnh.");
     }
 

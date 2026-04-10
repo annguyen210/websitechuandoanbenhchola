@@ -3,7 +3,7 @@ from pathlib import Path
 import importlib.util
 
 from flask import Flask, jsonify, render_template, request, send_from_directory, url_for
-from werkzeug.exceptions import RequestEntityTooLarge
+from werkzeug.exceptions import HTTPException, RequestEntityTooLarge
 
 from services.config import get_settings
 from services.exceptions import AppError
@@ -105,6 +105,36 @@ def handle_large_file(_: RequestEntityTooLarge) -> tuple[dict, int]:
         ),
         413,
     )
+
+
+@app.errorhandler(HTTPException)
+def handle_http_exception(exc: HTTPException) -> tuple[dict, int]:
+    if request.path.startswith("/api/"):
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": exc.description or "Yêu cầu không hợp lệ.",
+                }
+            ),
+            exc.code or 500,
+        )
+    return exc
+
+
+@app.errorhandler(Exception)
+def handle_internal_error(exc: Exception) -> tuple[dict, int]:
+    if request.path.startswith("/api/"):
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": "Máy chủ gặp lỗi ngoài dự kiến. Vui lòng thử lại sau.",
+                }
+            ),
+            500,
+        )
+    raise exc
 
 
 if __name__ == "__main__":
