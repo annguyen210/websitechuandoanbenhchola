@@ -7,3 +7,9 @@ uploads/originals/*
 uploads/processed/*
 !uploads/originals/.gitkeep
 !uploads/processed/.gitkeep
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+!.env.example
