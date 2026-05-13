@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python app.py)",
+      "Bash(curl -s http://localhost:5000/api/health)",
+      "Bash(python -c ' *)",
+      "Bash(python -c \"from google import genai; print\\('google-genai OK'\\)\")",
+      "Bash(Get-Process python *)",
+      "Bash(Stop-Process -Force)",
+      "Bash(Start-Sleep -Seconds 1)",
+      "Bash(Write-Host \"Stopped\")",
+      "PowerShell(Get-Process *)",
+      "Bash(curl -s http://127.0.0.1:5000/api/health)",
+      "Bash(python3 -m json.tool)",
+      "Bash(netstat -ano)",
+      "Bash(xxd)",
+      "Bash(python -c \"import ast, sys; ast.parse\\(open\\('app.py'\\).read\\(\\)\\); print\\('app.py OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('app.py', encoding='utf-8'\\).read\\(\\)\\); print\\('app.py OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('services/llm_service.py', encoding='utf-8'\\).read\\(\\)\\); print\\('llm_service.py OK'\\)\")",
+      "Bash(pip install *)",
+      "Bash(python -c \"import qrcode; print\\('qrcode OK, version:', qrcode.__version__\\)\")",
+      "Bash(python -c \"import qrcode; qr = qrcode.QRCode\\(\\); qr.add_data\\('test'\\); qr.make\\(\\); print\\('qrcode hoạt động OK'\\)\")",
+      "Bash(set PYTHONIOENCODING=utf-8)",
+      "Bash(timeout 4)"
+    ]
+  }
+}

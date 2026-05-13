@@ -59,7 +59,7 @@ class AnalysisPipeline:
                     "duration_ms": cnn_ms,
                 },
                 {
-                    "step": "ChatGPT",
+                    "step": "Gemini",
                     "status": "done",
                     "detail": f"Sinh giải thích bằng nguồn {llm_report['source']}.",
                     "duration_ms": llm_ms,

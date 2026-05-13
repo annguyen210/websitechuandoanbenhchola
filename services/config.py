@@ -1,3 +1,4 @@
+
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -17,8 +18,9 @@ class Settings:
     yolo_model_path: Path
     cnn_model_path: Path
     cnn_labels_path: Path
-    openai_api_key: str | None
-    openai_model: str
+    gemini_api_key: str | None
+    gemini_model: str
+    gemini_model_fallbacks: list[str] | None
     yolo_conf_threshold: float
     crop_padding_ratio: float
     max_upload_size_mb: int
@@ -44,8 +46,9 @@ def get_settings() -> Settings:
         yolo_model_path=BASE_DIR / os.getenv("YOLO_MODEL_PATH", "moduleyolola/best.pt"),
         cnn_model_path=BASE_DIR / os.getenv("CNN_MODEL_PATH", "model_0.h5"),
         cnn_labels_path=BASE_DIR / os.getenv("CNN_LABELS_PATH", "config/cnn_labels.json"),
-        openai_api_key=os.getenv("OPENAI_API_KEY"),
-        openai_model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+        gemini_api_key=os.getenv("GEMINI_API_KEY"),
+        gemini_model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
+        gemini_model_fallbacks=["gemini-flash-latest"],
         yolo_conf_threshold=float(os.getenv("YOLO_CONF_THRESHOLD", "0.25")),
         crop_padding_ratio=float(os.getenv("CROP_PADDING_RATIO", "0.08")),
         max_upload_size_mb=int(os.getenv("MAX_UPLOAD_SIZE_MB", "10")),

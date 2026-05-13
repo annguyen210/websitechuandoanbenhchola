@@ -36,12 +36,33 @@ class CnnClassificationService:
             with self.__class__._model_lock:
                 if self.__class__._model is None:
                     try:
+                        # Try loading as full model first
                         self.__class__._model = tf.keras.models.load_model(
                             str(self.settings.cnn_model_path),
                             compile=False,
                         )
                     except Exception:
-                        return None
+                        # If that fails, try loading weights into custom architecture
+                        try:
+                            import tensorflow as tf
+                            # Create EfficientNet-B3 base model
+                            base_model = tf.keras.applications.EfficientNetB3(
+                                include_top=False,
+                                weights=None,
+                                input_shape=(300, 300, 3),
+                                pooling='avg',
+                                name='efficientnet-b3'
+                            )
+                            # Add custom layers
+                            x = tf.keras.layers.Dropout(0.5, name='dropout')(base_model.output)
+                            outputs = tf.keras.layers.Dense(5, activation='softmax', name='output')(x)
+                            model = tf.keras.Model(inputs=base_model.input, outputs=outputs)
+                            
+                            # Load weights by name to match layer structure
+                            model.load_weights(str(self.settings.cnn_model_path), by_name=True, skip_mismatch=True)
+                            self.__class__._model = model
+                        except Exception:
+                            return None
 
         return self.__class__._model
 

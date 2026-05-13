@@ -9,5 +9,6 @@ h5py
 tensorflow-cpu
 ultralytics
 opencv-python-headless
-openai
+google-genai
 gunicorn
+qrcode

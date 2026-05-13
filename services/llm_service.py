@@ -3,96 +3,89 @@ from __future__ import annotations
 import json
 import re
 
+from google import genai
+
 from services.config import Settings
 
 
 class LlmAdviceService:
     def __init__(self, settings: Settings):
         self.settings = settings
+        self._client: genai.Client | None = None
+
+    def _get_client(self) -> genai.Client:
+        if self._client is None:
+            self._client = genai.Client(api_key=self.settings.gemini_api_key)
+        return self._client
 
     def generate(self, detection: dict, classification: dict) -> dict:
-        if not self.settings.openai_api_key:
-            return self._fallback_report(classification, "Chưa cấu hình OPENAI_API_KEY.")
-
-        try:
-            from openai import OpenAI
-        except ModuleNotFoundError:
-            return self._fallback_report(classification, "Thiếu thư viện openai trong môi trường.")
-
-        prompt = self._build_prompt(detection, classification)
-        client = OpenAI(api_key=self.settings.openai_api_key)
-
-        try:
-            response = client.chat.completions.create(
-                model=self.settings.openai_model,
-                temperature=0.3,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "Bạn là chuyên gia hỗ trợ nhận diện bệnh lá cây. "
-                            "Bạn chỉ được suy luận từ dữ liệu YOLO và CNN do hệ thống cung cấp. "
-                            "Không khẳng định chắc chắn 100%, luôn nhắc người dùng quan sát thêm."
-                        ),
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-            )
-            content = self._extract_content(response)
-            parsed = self._parse_json(content)
-            return {
-                "source": "chatgpt",
-                "model": self.settings.openai_model,
-                "headline": parsed.get("headline", "Đã tạo nhận xét từ ChatGPT."),
-                "summary": parsed.get("summary", "").strip(),
-                "care_steps": parsed.get("care_steps", []),
-                "next_steps": parsed.get("next_steps", []),
-                "warning": parsed.get("warning", "").strip(),
-            }
-        except Exception as exc:
+        if not self.settings.gemini_api_key:
             return self._fallback_report(
                 classification,
-                f"ChatGPT tạm thời không phản hồi, hệ thống dùng gợi ý mặc định. Chi tiết: {exc}",
+                "Chưa cấu hình API key Gemini. Hệ thống dùng gợi ý mặc định từ CNN.",
             )
+
+        prompt = self._build_prompt(detection, classification)
+        models_to_try = [self.settings.gemini_model] + (self.settings.gemini_model_fallbacks or [])
+
+        last_error: Exception | None = None
+        for model_name in models_to_try:
+            try:
+                client = self._get_client()
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
+                )
+                data = self._parse_json(response.text)
+                return {"source": "gemini", "model": model_name, **data}
+            except Exception as exc:
+                last_error = exc
+                continue
+
+        return self._fallback_report(
+            classification,
+            f"Gemini không phản hồi ({last_error}). Hệ thống dùng gợi ý mặc định từ CNN.",
+        )
 
     def _build_prompt(self, detection: dict, classification: dict) -> str:
         top_predictions = "\n".join(
             f"- {item['display_label']}: {item['confidence'] * 100:.2f}%"
             for item in classification["top_predictions"]
         )
+        cnn_label = classification["display_label"]
+        cnn_conf = classification["confidence"] * 100
+        low_conf_note = " (ĐỘ TIN CẬY THẤP - cần kiểm tra thực tế thêm)" if cnn_conf < 60 else ""
+
         return f"""
-Hãy trả về JSON hợp lệ với đúng các khóa:
-headline, summary, care_steps, next_steps, warning
+Bạn là chuyên gia thực vật học cấp cao. Nhiệm vụ của bạn là XÁC NHẬN và BỔ SUNG thông tin dựa trên kết quả đã được mô hình CNN phân loại.
 
-Yêu cầu:
-- Viết bằng tiếng Việt, ngắn gọn, dễ hiểu với người dùng phổ thông.
-- summary dài 2-3 câu.
-- care_steps là mảng 3-4 ý hành động thực tế.
-- next_steps là mảng 2-3 ý quan sát tiếp theo.
-- warning là 1 câu nhắc đây chỉ là gợi ý từ mô hình AI.
-
-Dữ liệu đầu vào:
-- YOLO tìm thấy lá: {"có" if detection["found"] else "không"}
-- Độ tin cậy YOLO: {detection["confidence"] * 100:.2f}%
-- Kết quả CNN tốt nhất: {classification["display_label"]}
-- Độ tin cậy CNN: {classification["confidence"] * 100:.2f}%
-- Top dự đoán:
+=== KẾT QUẢ TỪ HỆ THỐNG CNN (NGUỒN CHÍNH XÁC - KHÔNG ĐƯỢC THAY ĐỔI) ===
+- Chẩn đoán CNN: {cnn_label}{low_conf_note}
+- Độ tin cậy CNN: {cnn_conf:.1f}%
+- YOLO phát hiện lá: {"Có" if detection["found"] else "Không (dùng toàn ảnh)"}
+- Độ tin cậy YOLO: {detection["confidence"] * 100:.1f}%
+- Toàn bộ dự đoán CNN:
 {top_predictions}
-""".strip()
 
-    def _extract_content(self, response) -> str:
-        message = response.choices[0].message.content
-        if isinstance(message, str):
-            return message
-        if isinstance(message, list):
-            parts = []
-            for item in message:
-                if isinstance(item, dict):
-                    parts.append(item.get("text", ""))
-                else:
-                    parts.append(getattr(item, "text", ""))
-            return "\n".join(part for part in parts if part)
-        return str(message)
+=== QUY TẮC BẮT BUỘC ===
+1. KHÔNG được thay đổi hoặc phủ nhận kết quả CNN "{cnn_label}" - đây là chẩn đoán chính thức.
+2. Tất cả thông tin bạn cung cấp PHẢI phù hợp với bệnh/tình trạng "{cnn_label}".
+3. Nếu CNN có độ tin cậy < 60%, ghi rõ cảnh báo trong trường warning.
+4. Bổ sung thông tin phụ trợ thực tế, sát với đặc điểm bệnh "{cnn_label}".
+
+Trả về JSON hợp lệ với đúng các khóa (tiếng Việt, ngắn gọn, dễ hiểu):
+- headline: tiêu đề ngắn gọn xác nhận chẩn đoán CNN "{cnn_label}"
+- summary: 2-3 câu mô tả triệu chứng và đặc điểm thực tế của "{cnn_label}"
+- care_steps: mảng 3-4 bước xử lý cụ thể, thực tế cho bệnh "{cnn_label}"
+- next_steps: mảng 2-3 bước theo dõi sau khi xử lý
+- warning: 1 câu về độ tin cậy CNN ({cnn_conf:.0f}%) và lưu ý cần thiết
+- health_score: số nguyên 1-100 phản ánh mức độ nghiêm trọng của "{cnn_label}" (1=rất nặng, 100=khỏe)
+- economic_impact: thiệt hại kinh tế điển hình của "{cnn_label}"
+- spread_level: mức lây lan thực tế của "{cnn_label}" ("thấp"/"trung bình"/"cao")
+- treatment_schedule: mảng bước điều trị theo thời gian [{{"action": "...", "days_later": 0}}]
+- plant_type: loại cây thường gặp bệnh "{cnn_label}"
+- disease_progression: object gồm 3_days, 7_days, 14_days mô tả diễn biến nếu không điều trị
+""".strip()
 
     def _parse_json(self, content: str) -> dict:
         cleaned = re.sub(r"^```json|```$", "", content.strip(), flags=re.MULTILINE).strip()
@@ -103,6 +96,12 @@ Dữ liệu đầu vào:
             "care_steps": [str(item).strip() for item in data.get("care_steps", []) if str(item).strip()],
             "next_steps": [str(item).strip() for item in data.get("next_steps", []) if str(item).strip()],
             "warning": str(data.get("warning", "")).strip(),
+            "health_score": int(data.get("health_score", 50)),
+            "economic_impact": str(data.get("economic_impact", "")).strip(),
+            "spread_level": str(data.get("spread_level", "unknown")).strip(),
+            "treatment_schedule": data.get("treatment_schedule", []),
+            "plant_type": str(data.get("plant_type", "unknown")).strip(),
+            "disease_progression": data.get("disease_progression", {}),
         }
 
     def _fallback_report(self, classification: dict, reason: str) -> dict:
@@ -127,4 +126,10 @@ Dữ liệu đầu vào:
                 "So sánh thêm với ảnh chuẩn hoặc hỏi cán bộ nông nghiệp khi cần.",
             ],
             "warning": reason,
+            "health_score": 50,
+            "economic_impact": "",
+            "spread_level": "unknown",
+            "treatment_schedule": [],
+            "plant_type": "unknown",
+            "disease_progression": {},
         }
