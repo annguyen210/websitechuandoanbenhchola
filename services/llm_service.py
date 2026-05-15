@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import json
+import mimetypes
 import re
+from pathlib import Path
 
 from google import genai
+from google.genai import types
 
 from services.config import Settings
 
@@ -18,7 +21,7 @@ class LlmAdviceService:
             self._client = genai.Client(api_key=self.settings.gemini_api_key)
         return self._client
 
-    def generate(self, detection: dict, classification: dict) -> dict:
+    def generate(self, detection: dict, classification: dict, image_path: Path | None = None) -> dict:
         if not self.settings.gemini_api_key:
             return self._fallback_report(
                 classification,
@@ -26,6 +29,7 @@ class LlmAdviceService:
             )
 
         prompt = self._build_prompt(detection, classification)
+        contents = self._build_contents(prompt, image_path)
         models_to_try = [self.settings.gemini_model] + (self.settings.gemini_model_fallbacks or [])
 
         last_error: Exception | None = None
@@ -34,12 +38,34 @@ class LlmAdviceService:
                 client = self._get_client()
                 response = client.models.generate_content(
                     model=model_name,
-                    contents=prompt,
+                    contents=contents,
                 )
                 data = self._parse_json(response.text)
-                return {"source": "gemini", "model": model_name, **data}
+                return {
+                    "source": "gemini",
+                    "model": model_name,
+                    "image_analyzed": image_path is not None and (image_path.exists() if image_path else False),
+                    **data,
+                }
             except Exception as exc:
                 last_error = exc
+                # Nếu lỗi multimodal, thử lại với text-only
+                if image_path is not None:
+                    try:
+                        client = self._get_client()
+                        response = client.models.generate_content(
+                            model=model_name,
+                            contents=prompt,
+                        )
+                        data = self._parse_json(response.text)
+                        return {
+                            "source": "gemini",
+                            "model": model_name,
+                            "image_analyzed": False,
+                            **data,
+                        }
+                    except Exception as exc2:
+                        last_error = exc2
                 continue
 
         return self._fallback_report(
@@ -47,54 +73,118 @@ class LlmAdviceService:
             f"Gemini không phản hồi ({last_error}). Hệ thống dùng gợi ý mặc định từ CNN.",
         )
 
+    def _build_contents(self, prompt: str, image_path: Path | None) -> list | str:
+        """Tạo contents multimodal nếu có ảnh, ngược lại trả text thuần."""
+        if image_path is None or not image_path.exists():
+            return prompt
+
+        try:
+            mime_type = mimetypes.guess_type(str(image_path))[0] or "image/jpeg"
+            with open(image_path, "rb") as f:
+                image_bytes = f.read()
+            return [
+                types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
+                types.Part.from_text(text=prompt),
+            ]
+        except Exception:
+            return prompt
+
     def _build_prompt(self, detection: dict, classification: dict) -> str:
         top_predictions = "\n".join(
-            f"- {item['display_label']}: {item['confidence'] * 100:.2f}%"
-            for item in classification["top_predictions"]
+            f"  {i+1}. {item['display_label']}: {item['confidence'] * 100:.2f}%"
+            for i, item in enumerate(classification["top_predictions"])
         )
         cnn_label = classification["display_label"]
         cnn_conf = classification["confidence"] * 100
-        low_conf_note = " (ĐỘ TIN CẬY THẤP - cần kiểm tra thực tế thêm)" if cnn_conf < 60 else ""
+        tta_runs = classification.get("tta_runs", 1)
+        preprocess_mode = classification.get("preprocess_mode", "unknown")
+        low_conf_note = " ⚠️ ĐỘ TIN CẬY THẤP" if cnn_conf < 60 else ""
+        yolo_found = "Có" if detection["found"] else "Không – phân tích toàn bộ ảnh gốc"
 
         return f"""
-Bạn là chuyên gia thực vật học cấp cao. Nhiệm vụ của bạn là XÁC NHẬN và BỔ SUNG thông tin dựa trên kết quả đã được mô hình CNN phân loại.
+Bạn là chuyên gia bệnh học thực vật cấp cao, chuyên sâu về cây sắn (cassava/mì). Nhiệm vụ: phân tích hình ảnh lá thực tế để chẩn đoán bệnh và đưa ra tư vấn xử lý thiết thực.
 
-=== KẾT QUẢ TỪ HỆ THỐNG CNN (NGUỒN CHÍNH XÁC - KHÔNG ĐƯỢC THAY ĐỔI) ===
-- Chẩn đoán CNN: {cnn_label}{low_conf_note}
-- Độ tin cậy CNN: {cnn_conf:.1f}%
-- YOLO phát hiện lá: {"Có" if detection["found"] else "Không (dùng toàn ảnh)"}
-- Độ tin cậy YOLO: {detection["confidence"] * 100:.1f}%
-- Toàn bộ dự đoán CNN:
+═══════════════════════════════════════════════
+BƯỚC 1 — PHÂN TÍCH HÌNH ẢNH THỰC TẾ (LÀM TRƯỚC TIÊN)
+═══════════════════════════════════════════════
+Quan sát KỸ hình ảnh lá cây được gửi kèm. Ghi nhận những gì bạn THỰC SỰ THẤY:
+
+• Màu sắc lá: xanh đồng đều | vàng nhạt | đốm vàng | khảm vàng-xanh | nâu/đen?
+• Bề mặt: phẳng mịn | nhăn | cong vênh | phồng rộp?
+• Vết thương / tổn thương: có/không — mô tả vị trí, màu sắc, hình dạng, mức độ lan?
+• Gân lá: bình thường | đổi màu | vết nâu/vàng dọc gân?
+• Mép lá: nguyên vẹn | hoại tử khô | mềm thối?
+• Nhận định sơ bộ từ ảnh: Lá KHỎE hay có TRIỆU CHỨNG BỆNH RÕ RÀNG?
+
+BẢNG NHẬN DIỆN 5 LỚP BỆNH — ĐỌC KỸ ĐỂ ĐỐI CHIẾU:
+1. Cassava Bacterial Blight (CBB)      → đốm góc lá hình đa giác viền vàng→nâu, tiết dịch đen, héo từ ngọn xuống
+2. Cassava Brown Streak Disease (CBSD) → vệt vàng dọc gân lá, đốm hoại tử nâu-vàng xen kẽ, thối vỏ củ
+3. Cassava Green Mottle (CGM)          → lốm đốm xanh nhạt không đều, lá hơi biến dạng nhẹ
+4. Cassava Mosaic Disease (CMD)        → khảm vàng-xanh rõ rệt, lá nhăn cuộn mạnh, biến dạng đáng kể
+5. Healthy                             → xanh đồng đều, không đốm, không biến dạng, không tổn thương
+
+═══════════════════════════════════════════════
+BƯỚC 2 — KẾT QUẢ CNN (THÔNG TIN THAM KHẢO)
+═══════════════════════════════════════════════
+Mô hình CNN (EfficientNetB3, {tta_runs} lần TTA, preprocessing={preprocess_mode}):
+• Chẩn đoán CNN: {cnn_label}{low_conf_note} — {cnn_conf:.1f}%
+• YOLO phát hiện lá: {yolo_found}
+• Xác suất 5 lớp (cao → thấp):
 {top_predictions}
 
-=== QUY TẮC BẮT BUỘC ===
-1. KHÔNG được thay đổi hoặc phủ nhận kết quả CNN "{cnn_label}" - đây là chẩn đoán chính thức.
-2. Tất cả thông tin bạn cung cấp PHẢI phù hợp với bệnh/tình trạng "{cnn_label}".
-3. Nếu CNN có độ tin cậy < 60%, ghi rõ cảnh báo trong trường warning.
-4. Bổ sung thông tin phụ trợ thực tế, sát với đặc điểm bệnh "{cnn_label}".
+═══════════════════════════════════════════════
+BƯỚC 3 — ĐỐI CHIẾU & KẾT LUẬN TỔNG HỢP
+═══════════════════════════════════════════════
+Quy tắc tổng hợp:
+• CNN conf ≥ 80% VÀ khớp quan sát ảnh → tin CNN, xác nhận, bổ sung chi tiết
+• CNN conf 60–79% VÀ khớp ảnh → chấp nhận CNN, bổ sung phân tích hình ảnh
+• CNN conf < 60% HOẶC quan sát ảnh mâu thuẫn → ưu tiên nhận định từ ảnh thực tế
+• Cuối cùng PHẢI đưa ra "final_diagnosis" rõ ràng từ danh sách 5 lớp trên
 
-Trả về JSON hợp lệ với đúng các khóa (tiếng Việt, ngắn gọn, dễ hiểu):
-- headline: tiêu đề ngắn gọn xác nhận chẩn đoán CNN "{cnn_label}"
-- summary: 2-3 câu mô tả triệu chứng và đặc điểm thực tế của "{cnn_label}"
-- care_steps: mảng 3-4 bước xử lý cụ thể, thực tế cho bệnh "{cnn_label}"
-- next_steps: mảng 2-3 bước theo dõi sau khi xử lý
-- warning: 1 câu về độ tin cậy CNN ({cnn_conf:.0f}%) và lưu ý cần thiết
-- health_score: số nguyên 1-100 phản ánh mức độ nghiêm trọng của "{cnn_label}" (1=rất nặng, 100=khỏe)
-- economic_impact: thiệt hại kinh tế điển hình của "{cnn_label}"
-- spread_level: mức lây lan thực tế của "{cnn_label}" ("thấp"/"trung bình"/"cao")
-- treatment_schedule: mảng bước điều trị theo thời gian [{{"action": "...", "days_later": 0}}]
-- plant_type: loại cây thường gặp bệnh "{cnn_label}"
-- disease_progression: object gồm 3_days, 7_days, 14_days mô tả diễn biến nếu không điều trị
+═══════════════════════════════════════════════
+YÊU CẦU ĐẦU RA — JSON TIẾNG VIỆT HỢP LỆ
+═══════════════════════════════════════════════
+{{
+  "headline": "Tiêu đề ≤12 từ phản ánh chẩn đoán tổng hợp từ ảnh + CNN",
+  "final_diagnosis": "một trong: cassava_bacterial_blight | cassava_brown_streak_disease | cassava_green_mottle | cassava_mosaic_disease | healthy",
+  "cnn_agreement": "agree | disagree | uncertain",
+  "visual_confidence": "high | medium | low",
+  "summary": "3-4 câu mô tả CỤ THỂ triệu chứng bạn THỰC SỰ THẤY trong ảnh + mức độ khớp với chẩn đoán. Mỗi ảnh phải có mô tả riêng biệt, không chung chung.",
+  "visual_observations": [
+    "Quan sát 1: chi tiết cụ thể từ ảnh (màu sắc, đốm, kết cấu...)",
+    "Quan sát 2: chi tiết cụ thể khác",
+    "Quan sát 3: chi tiết cụ thể khác"
+  ],
+  "disease_evidence": "Giải thích TẠI SAO hình ảnh khớp hoặc KHÔNG khớp với {cnn_label}. Nêu bằng chứng hình ảnh cụ thể. Đề xuất bệnh khả năng hơn nếu mâu thuẫn.",
+  "care_steps": [
+    "Bước 1 xử lý cụ thể theo bệnh đã chẩn đoán",
+    "Bước 2",
+    "Bước 3",
+    "Bước 4"
+  ],
+  "next_steps": ["Theo dõi tiếp 1", "Theo dõi tiếp 2"],
+  "recommendations": ["Khuyến nghị thêm 1 liên quan đến phòng bệnh/canh tác", "Khuyến nghị thêm 2"],
+  "warning": "Nhận xét về mức độ khớp CNN ({cnn_conf:.0f}%) vs quan sát ảnh thực tế. Ghi rõ nếu có mâu thuẫn hoặc bất thường đáng chú ý.",
+  "health_score": 50,
+  "economic_impact": "Ước tính thiệt hại kinh tế nếu không xử lý kịp thời",
+  "spread_level": "thấp | trung bình | cao",
+  "treatment_schedule": [{{"action": "Hành động cụ thể", "days_later": 0}}],
+  "plant_type": "Loại cây xác định từ ảnh",
+  "disease_progression": {{"3_days": "...", "7_days": "...", "14_days": "..."}}
+}}
 """.strip()
 
     def _parse_json(self, content: str) -> dict:
-        cleaned = re.sub(r"^```json|```$", "", content.strip(), flags=re.MULTILINE).strip()
+        cleaned = re.sub(r"^```json|^```|```$", "", content.strip(), flags=re.MULTILINE).strip()
         data = json.loads(cleaned)
         return {
             "headline": str(data.get("headline", "")).strip(),
+            "final_diagnosis": str(data.get("final_diagnosis", "")).strip(),
+            "cnn_agreement": str(data.get("cnn_agreement", "uncertain")).strip(),
+            "visual_confidence": str(data.get("visual_confidence", "medium")).strip(),
             "summary": str(data.get("summary", "")).strip(),
-            "care_steps": [str(item).strip() for item in data.get("care_steps", []) if str(item).strip()],
-            "next_steps": [str(item).strip() for item in data.get("next_steps", []) if str(item).strip()],
+            "care_steps": [str(i).strip() for i in data.get("care_steps", []) if str(i).strip()],
+            "next_steps": [str(i).strip() for i in data.get("next_steps", []) if str(i).strip()],
             "warning": str(data.get("warning", "")).strip(),
             "health_score": int(data.get("health_score", 50)),
             "economic_impact": str(data.get("economic_impact", "")).strip(),
@@ -102,6 +192,11 @@ Trả về JSON hợp lệ với đúng các khóa (tiếng Việt, ngắn gọn
             "treatment_schedule": data.get("treatment_schedule", []),
             "plant_type": str(data.get("plant_type", "unknown")).strip(),
             "disease_progression": data.get("disease_progression", {}),
+            "visual_observations": [
+                str(i).strip() for i in data.get("visual_observations", []) if str(i).strip()
+            ],
+            "disease_evidence": str(data.get("disease_evidence", "")).strip(),
+            "recommendations": [str(i).strip() for i in data.get("recommendations", []) if str(i).strip()],
         }
 
     def _fallback_report(self, classification: dict, reason: str) -> dict:
@@ -110,7 +205,11 @@ Trả về JSON hợp lệ với đúng các khóa (tiếng Việt, ngắn gọn
         return {
             "source": "fallback",
             "model": "local-template",
-            "headline": f"Kết quả gần nhất: {label}",
+            "image_analyzed": False,
+            "headline": f"Kết quả CNN: {label}",
+            "final_diagnosis": classification.get("label", ""),
+            "cnn_agreement": "uncertain",
+            "visual_confidence": "low",
             "summary": (
                 f"CNN đang nghiêng về lớp '{label}' với độ tin cậy khoảng {confidence:.1f}%. "
                 "Bạn nên xem đây là gợi ý ban đầu để kiểm tra lá và điều kiện chăm sóc thực tế."
@@ -125,6 +224,7 @@ Trả về JSON hợp lệ với đúng các khóa (tiếng Việt, ngắn gọn
                 "Theo dõi sự thay đổi của đốm lá trong 3-5 ngày tiếp theo.",
                 "So sánh thêm với ảnh chuẩn hoặc hỏi cán bộ nông nghiệp khi cần.",
             ],
+            "recommendations": [],
             "warning": reason,
             "health_score": 50,
             "economic_impact": "",
@@ -132,4 +232,6 @@ Trả về JSON hợp lệ với đúng các khóa (tiếng Việt, ngắn gọn
             "treatment_schedule": [],
             "plant_type": "unknown",
             "disease_progression": {},
+            "visual_observations": [],
+            "disease_evidence": "",
         }

@@ -42,6 +42,13 @@ const elements = {
   economicImpact: document.getElementById("economicImpact"),
   treatmentSchedule: document.getElementById("treatmentSchedule"),
   diseaseProgression: document.getElementById("diseaseProgression"),
+  diagnosisBadge: document.getElementById("diagnosisBadge"),
+  finalDiagnosis: document.getElementById("finalDiagnosis"),
+  cnnAgreementBadge: document.getElementById("cnnAgreementBadge"),
+  diseaseEvidenceSection: document.getElementById("diseaseEvidenceSection"),
+  diseaseEvidence: document.getElementById("diseaseEvidence"),
+  recommendations: document.getElementById("recommendations"),
+  recommendationsSection: document.getElementById("recommendationsSection"),
 };
 
 function basePipeline() {
@@ -397,7 +404,10 @@ function renderClassification(classification) {
 
 function renderAdvice(llm) {
   if (elements.llmSource) {
-    elements.llmSource.textContent = `Nguồn: ${llm.source} (${llm.model})`;
+    const imgBadge = llm.image_analyzed
+      ? ' <span style="background:#d1fae5;color:#065f46;font-size:.75rem;padding:2px 8px;border-radius:12px;font-weight:600;">📷 Đã phân tích ảnh</span>'
+      : '';
+    elements.llmSource.innerHTML = `Nguồn: ${llm.source} (${llm.model})${imgBadge}`;
   }
   if (elements.llmHeadline) {
     elements.llmHeadline.textContent = llm.headline || "-";
@@ -446,6 +456,62 @@ function renderAdvice(llm) {
     elements.diseaseProgression.innerHTML = Object.entries(llm.disease_progression)
       .map(([key, value]) => `<div><strong>${key}:</strong> ${escapeHtml(value)}</div>`)
       .join("");
+  }
+
+  // Visual Observations từ Gemini (chỉ hiện khi có dữ liệu)
+  const obsSection = document.getElementById("visualObsSection");
+  const obsList = document.getElementById("visualObservations");
+  if (obsSection && obsList) {
+    const obs = llm.visual_observations || [];
+    if (obs.length > 0) {
+      renderList(obsList, obs);
+      obsSection.style.display = "";
+    } else {
+      obsSection.style.display = "none";
+    }
+  }
+
+  // Chẩn đoán tổng hợp (final_diagnosis + cnn_agreement)
+  if (elements.diagnosisBadge) {
+    if (llm.final_diagnosis) {
+      const displayName = llm.final_diagnosis.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+      if (elements.finalDiagnosis) elements.finalDiagnosis.textContent = displayName;
+      if (elements.cnnAgreementBadge) {
+        const agreementMap = {
+          agree: { text: "✓ CNN đồng thuận", bg: "#d1fae5", color: "#065f46" },
+          disagree: { text: "⚠ CNN mâu thuẫn", bg: "#fee2e2", color: "#991b1b" },
+          uncertain: { text: "~ Chưa chắc chắn", bg: "#fef3c7", color: "#92400e" },
+        };
+        const a = agreementMap[llm.cnn_agreement] || { text: llm.cnn_agreement || "-", bg: "#f3f4f6", color: "#374151" };
+        elements.cnnAgreementBadge.textContent = a.text;
+        elements.cnnAgreementBadge.style.background = a.bg;
+        elements.cnnAgreementBadge.style.color = a.color;
+      }
+      elements.diagnosisBadge.style.display = "flex";
+    } else {
+      elements.diagnosisBadge.style.display = "none";
+    }
+  }
+
+  // Bằng chứng hình ảnh từ Gemini
+  if (elements.diseaseEvidenceSection && elements.diseaseEvidence) {
+    if (llm.disease_evidence) {
+      elements.diseaseEvidence.textContent = llm.disease_evidence;
+      elements.diseaseEvidenceSection.style.display = "";
+    } else {
+      elements.diseaseEvidenceSection.style.display = "none";
+    }
+  }
+
+  // Khuyến nghị thêm
+  if (elements.recommendationsSection && elements.recommendations) {
+    const recs = llm.recommendations || [];
+    if (recs.length > 0) {
+      renderList(elements.recommendations, recs);
+      elements.recommendationsSection.style.display = "";
+    } else {
+      elements.recommendationsSection.style.display = "none";
+    }
   }
 }
 

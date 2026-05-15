@@ -171,9 +171,18 @@
                 </div>
               </div>
             </div>
+            <div id="diagnosisBadge" style="display:none;padding:0.6rem 0.75rem;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;margin-bottom:0.75rem;flex-wrap:wrap;align-items:center;gap:0.5rem;">
+              <span style="font-size:0.8rem;color:#374151;">Chẩn đoán tổng hợp:</span>
+              <strong id="finalDiagnosis" style="font-size:0.9rem;color:#15803d;">-</strong>
+              <span id="cnnAgreementBadge" style="font-size:.72rem;padding:2px 8px;border-radius:12px;font-weight:600;">-</span>
+            </div>
             <div class="llm-block">
               <strong id="llmHeadline">-</strong>
               <p id="llmSummary">-</p>
+              <div id="diseaseEvidenceSection" style="display:none;margin-top:0.75rem;padding:0.6rem 0.75rem;background:#fffbeb;border-left:3px solid #f59e0b;border-radius:0 6px 6px 0;">
+                <h4 style="font-size:0.8rem;font-weight:700;color:#92400e;margin:0 0 0.3rem 0;">Bằng chứng hình ảnh (Gemini):</h4>
+                <p id="diseaseEvidence" style="font-size:0.85rem;color:#374151;margin:0;"></p>
+              </div>
             </div>
             <div class="llm-columns">
               <div>
@@ -206,6 +215,14 @@
               <div class="info-section">
                 <h4>Dự báo diễn biến bệnh:</h4>
                 <div id="diseaseProgression"></div>
+              </div>
+              <div class="info-section" id="visualObsSection" style="display:none;">
+                <h4>Quan sát trực quan từ ảnh (Gemini):</h4>
+                <ul id="visualObservations"></ul>
+              </div>
+              <div class="info-section" id="recommendationsSection" style="display:none;">
+                <h4>Khuyến nghị thêm:</h4>
+                <ul id="recommendations"></ul>
               </div>
             </div>
             <div class="action-buttons">
