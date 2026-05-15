@@ -478,9 +478,9 @@ function renderAdvice(llm) {
       if (elements.finalDiagnosis) elements.finalDiagnosis.textContent = displayName;
       if (elements.cnnAgreementBadge) {
         const agreementMap = {
-          agree: { text: "✓ CNN đồng thuận", bg: "#d1fae5", color: "#065f46" },
-          disagree: { text: "⚠ CNN mâu thuẫn", bg: "#fee2e2", color: "#991b1b" },
-          uncertain: { text: "~ Chưa chắc chắn", bg: "#fef3c7", color: "#92400e" },
+          agree: { text: "✓ CNN xác nhận", bg: "#d1fae5", color: "#065f46" },
+          disagree: { text: "~ Gemini bổ sung", bg: "#fef3c7", color: "#92400e" },
+          uncertain: { text: "~ Đang đối chiếu", bg: "#f3f4f6", color: "#374151" },
         };
         const a = agreementMap[llm.cnn_agreement] || { text: llm.cnn_agreement || "-", bg: "#f3f4f6", color: "#374151" };
         elements.cnnAgreementBadge.textContent = a.text;

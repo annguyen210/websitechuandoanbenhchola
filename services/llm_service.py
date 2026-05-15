@@ -135,11 +135,22 @@ Mô hình CNN (EfficientNetB3, {tta_runs} lần TTA, preprocessing={preprocess_m
 ═══════════════════════════════════════════════
 BƯỚC 3 — ĐỐI CHIẾU & KẾT LUẬN TỔNG HỢP
 ═══════════════════════════════════════════════
-Quy tắc tổng hợp:
-• CNN conf ≥ 80% VÀ khớp quan sát ảnh → tin CNN, xác nhận, bổ sung chi tiết
-• CNN conf 60–79% VÀ khớp ảnh → chấp nhận CNN, bổ sung phân tích hình ảnh
-• CNN conf < 60% HOẶC quan sát ảnh mâu thuẫn → ưu tiên nhận định từ ảnh thực tế
-• Cuối cùng PHẢI đưa ra "final_diagnosis" rõ ràng từ danh sách 5 lớp trên
+QUY TẮC BẮT BUỘC — CNN LÀ NGUỒN CHÍNH, ảnh là nguồn bổ sung:
+
+• CNN conf ≥ 55%: DÙNG KẾT QUẢ CNN → final_diagnosis = kết quả CNN, cnn_agreement = "agree".
+  Nhiệm vụ: xác nhận CNN bằng quan sát ảnh, bổ sung chi tiết chuyên môn.
+
+• CNN conf 40–54%: THAM KHẢO CNN → nếu ảnh không có bằng chứng HOÀN TOÀN trái ngược,
+  vẫn giữ final_diagnosis = kết quả CNN, cnn_agreement = "uncertain".
+  Chỉ đổi final_diagnosis khi ảnh có triệu chứng đặc trưng của bệnh KHÁC rõ ràng tuyệt đối.
+
+• CNN conf < 40%: CÂN NHẮC ảnh thực tế → nếu thấy triệu chứng bệnh khác rõ ràng trong ảnh,
+  có thể đổi final_diagnosis và đặt cnn_agreement = "disagree".
+
+LƯU Ý QUAN TRỌNG:
+- final_diagnosis PHẢI khớp với kết quả CNN trong phần lớn trường hợp (conf ≥ 40%).
+- Chỉ đặt cnn_agreement = "disagree" khi CNN conf < 40% VÀ ảnh có bằng chứng cực kỳ rõ ràng.
+- Khi nghi ngờ: giữ CNN, đặt cnn_agreement = "uncertain", ghi chú trong disease_evidence.
 
 ═══════════════════════════════════════════════
 YÊU CẦU ĐẦU RA — JSON TIẾNG VIỆT HỢP LỆ
