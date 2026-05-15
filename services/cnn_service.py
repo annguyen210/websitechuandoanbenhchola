@@ -410,13 +410,13 @@ class CnnClassificationService:
 
     def _humanize_label(self, label: str) -> str:
         _label_map = {
-            "cassava_bacterial_blight": "CBB (Bệnh bạc/cháy lá do vi khuẩn)",
-            "cassava_brown_streak_disease": "CBSD (Bệnh vằn, sọc nâu/rỉ sắt trên lá)",
-            "cassava_green_mottle": "CGM (Bệnh đốm xanh lá)",
-            "cassava_mosaic_disease": "CMD (Bệnh khảm lá)",
-            "healthy": "Healthy (Khỏe mạnh)",
+            "cassava_bacterial_blight": "cassava_bacterial_blight (Bệnh bạc/cháy lá do vi khuẩn)",
+            "cassava_brown_streak_disease": "cassava_brown_streak_disease (Bệnh vằn, sọc nâu/rỉ sắt trên lá)",
+            "cassava_green_mottle": "cassava_green_mottle (Bệnh đốm xanh lá)",
+            "cassava_mosaic_disease": "cassava_mosaic_disease (Bệnh khảm lá)",
+            "healthy": "healthy (Khỏe mạnh)",
         }
-        return _label_map.get(label, label.replace("-", " ").replace("_", " ").strip().title())
+        return _label_map.get(label, label)
 
     def _fallback_classification(self, message: str) -> dict:
         labels = self._load_labels(5)
