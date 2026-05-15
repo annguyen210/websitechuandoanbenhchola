@@ -36,7 +36,7 @@ class AnalysisPipeline:
         cnn_ms = round((time.perf_counter() - cnn_started) * 1000, 2)
 
         llm_started = time.perf_counter()
-        llm_report = self.llm.generate(detection, classification)
+        llm_report = self.llm.generate(detection, classification, image_path=detection["crop_path"])
         llm_ms = round((time.perf_counter() - llm_started) * 1000, 2)
 
         total_ms = round((time.perf_counter() - started_at) * 1000, 2)

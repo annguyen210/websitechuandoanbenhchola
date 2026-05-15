@@ -49,7 +49,6 @@ class LlmAdviceService:
                 }
             except Exception as exc:
                 last_error = exc
-                # Nếu lỗi multimodal, thử lại với text-only
                 if image_path is not None:
                     try:
                         client = self._get_client()
@@ -74,7 +73,6 @@ class LlmAdviceService:
         )
 
     def _build_contents(self, prompt: str, image_path: Path | None) -> list | str:
-        """Tạo contents multimodal nếu có ảnh, ngược lại trả text thuần."""
         if image_path is None or not image_path.exists():
             return prompt
 
@@ -97,7 +95,22 @@ class LlmAdviceService:
         cnn_label = classification["display_label"]
         cnn_conf = classification["confidence"] * 100
         tta_runs = classification.get("tta_runs", 1)
-        preprocess_mode = classification.get("preprocess_mode", "unknown")
+        preprocess_mode = classification.get("preprocess_mode", "efficientnet")
+        entropy_ratio = classification.get("entropy_ratio", 0.0)
+
+        # Chú thích tin cậy cho Gemini
+        if entropy_ratio > 0.78:
+            conf_note = (
+                f"⚠️ CẢNH BÁO: Entropy cao ({entropy_ratio * 100:.0f}% mức tối đa) — "
+                "CNN không nhận dạng được lá sắn rõ ràng, ảnh có thể không phải lá sắn."
+            )
+        elif cnn_conf < 40:
+            conf_note = f"⚠️ Độ tin cậy RẤT THẤP ({cnn_conf:.1f}%)"
+        elif cnn_conf < 60:
+            conf_note = f"⚠️ Độ tin cậy thấp ({cnn_conf:.1f}%)"
+        else:
+            conf_note = f"Độ tin cậy tốt ({cnn_conf:.1f}%)"
+
         low_conf_note = " ⚠️ ĐỘ TIN CẬY THẤP" if cnn_conf < 60 else ""
         yolo_found = "Có" if detection["found"] else "Không – phân tích toàn bộ ảnh gốc"
 
@@ -127,30 +140,22 @@ BẢNG NHẬN DIỆN 5 LỚP BỆNH — ĐỌC KỸ ĐỂ ĐỐI CHIẾU:
 BƯỚC 2 — KẾT QUẢ CNN (THÔNG TIN THAM KHẢO)
 ═══════════════════════════════════════════════
 Mô hình CNN (EfficientNetB3, {tta_runs} lần TTA, preprocessing={preprocess_mode}):
-• Chẩn đoán CNN: {cnn_label}{low_conf_note} — {cnn_conf:.1f}%
+• Chẩn đoán CNN: {cnn_label}{low_conf_note}
 • YOLO phát hiện lá: {yolo_found}
+• Đánh giá độ tin cậy: {conf_note}
 • Xác suất 5 lớp (cao → thấp):
 {top_predictions}
 
 ═══════════════════════════════════════════════
 BƯỚC 3 — ĐỐI CHIẾU & KẾT LUẬN TỔNG HỢP
 ═══════════════════════════════════════════════
-QUY TẮC BẮT BUỘC — CNN LÀ NGUỒN CHÍNH, ảnh là nguồn bổ sung:
+QUY TẮC — CNN là nguồn chính, quan sát ảnh là nguồn bổ sung/kiểm chứng:
 
-• CNN conf ≥ 55%: DÙNG KẾT QUẢ CNN → final_diagnosis = kết quả CNN, cnn_agreement = "agree".
-  Nhiệm vụ: xác nhận CNN bằng quan sát ảnh, bổ sung chi tiết chuyên môn.
+• CNN conf ≥ 55% VÀ entropy bình thường (<78%): DÙNG KẾT QUẢ CNN → final_diagnosis = kết quả CNN, cnn_agreement = "agree".
 
-• CNN conf 40–54%: THAM KHẢO CNN → nếu ảnh không có bằng chứng HOÀN TOÀN trái ngược,
-  vẫn giữ final_diagnosis = kết quả CNN, cnn_agreement = "uncertain".
-  Chỉ đổi final_diagnosis khi ảnh có triệu chứng đặc trưng của bệnh KHÁC rõ ràng tuyệt đối.
+• CNN conf 40–54% hoặc entropy cao (>60% nhưng <78%): THAM KHẢO CNN → nếu ảnh không có bằng chứng HOÀN TOÀN trái ngược, giữ final_diagnosis = CNN, cnn_agreement = "uncertain".
 
-• CNN conf < 40%: CÂN NHẮC ảnh thực tế → nếu thấy triệu chứng bệnh khác rõ ràng trong ảnh,
-  có thể đổi final_diagnosis và đặt cnn_agreement = "disagree".
-
-LƯU Ý QUAN TRỌNG:
-- final_diagnosis PHẢI khớp với kết quả CNN trong phần lớn trường hợp (conf ≥ 40%).
-- Chỉ đặt cnn_agreement = "disagree" khi CNN conf < 40% VÀ ảnh có bằng chứng cực kỳ rõ ràng.
-- Khi nghi ngờ: giữ CNN, đặt cnn_agreement = "uncertain", ghi chú trong disease_evidence.
+• CNN conf < 40% HOẶC entropy > 78%: PHÂN TÍCH ẢNH THỰC TẾ LÀ CHÍNH → nếu ảnh có triệu chứng bệnh rõ, đặt final_diagnosis theo quan sát ảnh, cnn_agreement = "disagree". Nếu không rõ hoặc không phải lá sắn, ghi nhận trong warning.
 
 ═══════════════════════════════════════════════
 YÊU CẦU ĐẦU RA — JSON TIẾNG VIỆT HỢP LỆ
@@ -160,13 +165,13 @@ YÊU CẦU ĐẦU RA — JSON TIẾNG VIỆT HỢP LỆ
   "final_diagnosis": "một trong: cassava_bacterial_blight | cassava_brown_streak_disease | cassava_green_mottle | cassava_mosaic_disease | healthy",
   "cnn_agreement": "agree | disagree | uncertain",
   "visual_confidence": "high | medium | low",
-  "summary": "3-4 câu mô tả CỤ THỂ triệu chứng bạn THỰC SỰ THẤY trong ảnh + mức độ khớp với chẩn đoán. Mỗi ảnh phải có mô tả riêng biệt, không chung chung.",
+  "summary": "3-4 câu mô tả CỤ THỂ triệu chứng bạn THỰC SỰ THẤY trong ảnh + mức độ khớp với chẩn đoán.",
   "visual_observations": [
     "Quan sát 1: chi tiết cụ thể từ ảnh (màu sắc, đốm, kết cấu...)",
     "Quan sát 2: chi tiết cụ thể khác",
     "Quan sát 3: chi tiết cụ thể khác"
   ],
-  "disease_evidence": "Giải thích TẠI SAO hình ảnh khớp hoặc KHÔNG khớp với {cnn_label}. Nêu bằng chứng hình ảnh cụ thể. Đề xuất bệnh khả năng hơn nếu mâu thuẫn.",
+  "disease_evidence": "Giải thích TẠI SAO hình ảnh khớp hoặc KHÔNG khớp với {cnn_label}. Nêu bằng chứng hình ảnh cụ thể.",
   "care_steps": [
     "Bước 1 xử lý cụ thể theo bệnh đã chẩn đoán",
     "Bước 2",
@@ -175,7 +180,7 @@ YÊU CẦU ĐẦU RA — JSON TIẾNG VIỆT HỢP LỆ
   ],
   "next_steps": ["Theo dõi tiếp 1", "Theo dõi tiếp 2"],
   "recommendations": ["Khuyến nghị thêm 1 liên quan đến phòng bệnh/canh tác", "Khuyến nghị thêm 2"],
-  "warning": "Nhận xét về mức độ khớp CNN ({cnn_conf:.0f}%) vs quan sát ảnh thực tế. Ghi rõ nếu có mâu thuẫn hoặc bất thường đáng chú ý.",
+  "warning": "Nhận xét về mức độ khớp CNN ({cnn_conf:.0f}%) vs quan sát ảnh. Ghi rõ nếu entropy cao hoặc ảnh không phải lá sắn.",
   "health_score": 50,
   "economic_impact": "Ước tính thiệt hại kinh tế nếu không xử lý kịp thời",
   "spread_level": "thấp | trung bình | cao",

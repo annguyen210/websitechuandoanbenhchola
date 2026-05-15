@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 from threading import Lock
 
-from PIL import Image, ImageEnhance, ImageOps
+from PIL import Image, ImageOps
 
 from services.config import Settings
 from services.exceptions import InferenceError
@@ -42,18 +43,21 @@ class CnnClassificationService:
                         )
                     except Exception:
                         try:
-                            import tensorflow as tf
-                            base_model = tf.keras.applications.EfficientNetB3(
+                            base = tf.keras.applications.EfficientNetB3(
                                 include_top=False,
                                 weights=None,
                                 input_shape=(300, 300, 3),
-                                pooling='avg',
-                                name='efficientnet-b3'
+                                pooling="avg",
+                                name="efficientnet-b3",
                             )
-                            x = tf.keras.layers.Dropout(0.5, name='dropout')(base_model.output)
-                            outputs = tf.keras.layers.Dense(5, activation='softmax', name='output')(x)
-                            model = tf.keras.Model(inputs=base_model.input, outputs=outputs)
-                            model.load_weights(str(self.settings.cnn_model_path), by_name=True, skip_mismatch=True)
+                            x = tf.keras.layers.Dropout(0.5, name="dropout")(base.output)
+                            out = tf.keras.layers.Dense(5, activation="softmax", name="output")(x)
+                            model = tf.keras.Model(inputs=base.input, outputs=out)
+                            model.load_weights(
+                                str(self.settings.cnn_model_path),
+                                by_name=True,
+                                skip_mismatch=True,
+                            )
                             self.__class__._model = model
                         except Exception:
                             return None
@@ -62,10 +66,10 @@ class CnnClassificationService:
 
     def _load_labels(self, expected_count: int) -> list[str]:
         if not self.settings.cnn_labels_path.exists():
-            return [f"class_{index}" for index in range(expected_count)]
+            return [f"class_{i}" for i in range(expected_count)]
 
-        with open(self.settings.cnn_labels_path, "r", encoding="utf-8") as file:
-            raw = json.load(file)
+        with open(self.settings.cnn_labels_path, "r", encoding="utf-8") as f:
+            raw = json.load(f)
 
         if isinstance(raw, dict):
             labels = raw.get("labels", [])
@@ -74,63 +78,38 @@ class CnnClassificationService:
         else:
             labels = []
 
-        normalized = [str(label).strip() for label in labels if str(label).strip()]
+        normalized = [str(lb).strip() for lb in labels if str(lb).strip()]
         if len(normalized) == expected_count:
             return normalized
 
         return [
-            normalized[index] if index < len(normalized) else f"class_{index}"
-            for index in range(expected_count)
+            normalized[i] if i < len(normalized) else f"class_{i}"
+            for i in range(expected_count)
         ]
 
-    def _enhance_image(self, image: Image.Image) -> Image.Image:
-        """Tăng nhẹ độ tương phản và độ sắc nét để làm nổi bật đặc trưng bệnh lá."""
-        image = ImageEnhance.Contrast(image).enhance(1.2)
-        image = ImageEnhance.Sharpness(image).enhance(1.1)
-        return image
-
-    def _get_tta_images(self, image: Image.Image, target_size: tuple) -> list[Image.Image]:
-        """Tạo các phiên bản augment để chạy TTA (Test Time Augmentation)."""
+    def _get_tta_variants(self, image: Image.Image, target_size: tuple) -> list[Image.Image]:
+        """3 biến thể TTA hợp lệ cho lá sắn: gốc, lật ngang, lật dọc."""
         try:
             resample = Image.Resampling.LANCZOS
         except AttributeError:
             resample = Image.LANCZOS  # type: ignore[attr-defined]
 
-        variants = [
-            image,
-            image.transpose(Image.FLIP_LEFT_RIGHT),
-            image.transpose(Image.FLIP_TOP_BOTTOM),
-            image.transpose(Image.FLIP_LEFT_RIGHT).transpose(Image.FLIP_TOP_BOTTOM),
-            image.rotate(90, expand=True),
-            image.rotate(270, expand=True),
+        base = image.resize(target_size, resample)
+        return [
+            base,
+            base.transpose(Image.FLIP_LEFT_RIGHT),
+            base.transpose(Image.FLIP_TOP_BOTTOM),
         ]
-        return [img.resize(target_size, resample) for img in variants]
 
-    def _preprocess_with_mode(self, image_array, tf, mode: str):
-        """Chuẩn hóa mảng ảnh float32 với chế độ preprocessing chỉ định."""
-        if mode == "scale_01":
-            return image_array / 255.0
-        if mode == "efficientnet":
-            # preprocess_input có thể sửa in-place nên phải copy trước
-            arr = image_array.copy()
-            return tf.keras.applications.efficientnet.preprocess_input(arr)
-        return image_array / 255.0
+    def _preprocess(self, image_array, tf):
+        """EfficientNet preprocessing — chuẩn khớp với quá trình training EfficientNetB3."""
+        arr = image_array.copy()
+        return tf.keras.applications.efficientnet.preprocess_input(arr)
 
-    def _run_predictions_with_mode(
-        self, model, tta_images: list, np, tf, mode: str
-    ) -> list[list[float]]:
-        """Chạy toàn bộ TTA forward-pass với một chế độ preprocessing."""
-        predictions = []
-        for aug_img in tta_images:
-            arr = np.asarray(aug_img, dtype="float32")
-            arr = self._preprocess_with_mode(arr, tf, mode)
-            batch = np.expand_dims(arr, axis=0)
-            try:
-                pred = model.predict(batch, verbose=0)[0].tolist()
-                predictions.append(pred)
-            except Exception:
-                continue
-        return predictions
+    def _entropy(self, probs: list[float]) -> float:
+        """Shannon entropy (nats). Cao → model phân vân, ảnh có thể không phải lá sắn."""
+        eps = 1e-9
+        return -sum(p * math.log(p + eps) for p in probs)
 
     def classify(self, image_path: Path) -> dict:
         np, tf = self._load_tensorflow()
@@ -147,67 +126,73 @@ class CnnClassificationService:
             int(input_shape[2] or 300),
         )
 
+        # Đọc ảnh gốc nguyên bản — không tăng cường trước (model train trên ảnh tự nhiên)
         original_image = ImageOps.exif_transpose(Image.open(image_path)).convert("RGB")
-        # Tăng cường ảnh nhẹ để làm nổi bật đặc trưng bệnh trước khi phân loại
-        enhanced_image = self._enhance_image(original_image)
-        tta_images = self._get_tta_images(enhanced_image, target_size)
+        tta_variants = self._get_tta_variants(original_image, target_size)
 
-        # Thử cả hai chế độ preprocessing — chế độ đúng sẽ cho kết quả tự tin hơn (max conf cao hơn)
-        preds_scale01 = self._run_predictions_with_mode(model, tta_images, np, tf, "scale_01")
-        preds_efficientnet = self._run_predictions_with_mode(model, tta_images, np, tf, "efficientnet")
-
-        def top_conf(preds: list) -> float:
-            return float(np.max(np.mean(preds, axis=0))) if preds else 0.0
-
-        conf_01 = top_conf(preds_scale01)
-        conf_eff = top_conf(preds_efficientnet)
-
-        # Chọn chế độ có độ tự tin cao nhất — chế độ preprocessing đúng luôn cho phân phối rõ nét hơn
-        if conf_eff >= conf_01:
-            all_predictions = preds_efficientnet
-            best_mode = "efficientnet"
-        else:
-            all_predictions = preds_scale01
-            best_mode = "scale_01"
+        all_predictions: list[list[float]] = []
+        for variant in tta_variants:
+            arr = np.asarray(variant, dtype="float32")
+            arr = self._preprocess(arr, tf)
+            batch = np.expand_dims(arr, axis=0)
+            try:
+                pred = model.predict(batch, verbose=0)[0].tolist()
+                all_predictions.append(pred)
+            except Exception:
+                continue
 
         if not all_predictions:
             raise InferenceError("CNN không thể chạy phân loại trên ảnh này.")
 
+        # Trung bình TTA — ổn định hơn single-pass
         averaged = np.mean(all_predictions, axis=0).tolist()
 
-        labels = self._load_labels(len(averaged))
+        # Entropy để phát hiện ảnh không liên quan đến lá sắn
+        entropy_val = self._entropy(averaged)
+        n_classes = len(averaged)
+        max_entropy = math.log(n_classes)       # ln(5) ≈ 1.609
+        entropy_ratio = entropy_val / max_entropy  # 0 = chắc chắn, 1 = hoàn toàn phân vân
+
+        labels = self._load_labels(n_classes)
         ranked = sorted(
             (
                 {
-                    "label": labels[index],
-                    "display_label": self._humanize_label(labels[index]),
+                    "label": labels[i],
+                    "display_label": self._humanize_label(labels[i]),
                     "confidence": round(float(score), 4),
                 }
-                for index, score in enumerate(averaged)
+                for i, score in enumerate(averaged)
             ),
             key=lambda item: item["confidence"],
             reverse=True,
         )
 
         top = ranked[0]
-        max_conf_val = top["confidence"]
+        max_conf = top["confidence"]
         second_conf = ranked[1]["confidence"] if len(ranked) > 1 else 0.0
-        conf_gap = max_conf_val - second_conf
+        conf_gap = max_conf - second_conf
 
-        if max_conf_val < 0.40:
+        if entropy_ratio > 0.78:
+            # Phân phối gần đồng đều → model không nhận ra lá sắn
             warning = (
-                f"Độ tin cậy rất thấp ({max_conf_val * 100:.1f}%). "
-                "Ảnh có thể không phải lá cây hoặc chất lượng ảnh kém. Cần kiểm tra thực tế."
+                f"Phân phối xác suất quá đều (entropy {entropy_ratio * 100:.0f}% mức tối đa). "
+                "Ảnh có thể không phải lá sắn hoặc chất lượng quá kém. "
+                "Kết quả KHÔNG đáng tin cậy — hãy dùng ảnh lá sắn rõ nét."
             )
-        elif max_conf_val < 0.60:
+        elif max_conf < 0.40:
             warning = (
-                f"Độ tin cậy thấp ({max_conf_val * 100:.1f}%). "
-                "Nên chụp lại ảnh rõ hơn để có kết quả chính xác hơn."
+                f"Độ tin cậy rất thấp ({max_conf * 100:.1f}%). "
+                "Ảnh có thể không phải lá sắn hoặc bị che khuất, mờ. Nên kiểm tra thực tế."
+            )
+        elif max_conf < 0.60:
+            warning = (
+                f"Độ tin cậy trung bình ({max_conf * 100:.1f}%). "
+                "Nên chụp lại ảnh rõ hơn, đủ ánh sáng, tập trung vào lá sắn."
             )
         elif conf_gap < 0.10:
             warning = (
                 f"Hai nhóm bệnh có xác suất gần nhau "
-                f"({max_conf_val * 100:.1f}% vs {second_conf * 100:.1f}%). "
+                f"({max_conf * 100:.1f}% vs {second_conf * 100:.1f}%). "
                 "Nên kiểm tra thêm thực tế."
             )
         else:
@@ -219,45 +204,38 @@ class CnnClassificationService:
             "confidence": top["confidence"],
             "top_predictions": ranked[:5],
             "tta_runs": len(all_predictions),
-            "preprocess_mode": best_mode,
+            "preprocess_mode": "efficientnet",
+            "entropy": round(entropy_val, 4),
+            "entropy_ratio": round(entropy_ratio, 4),
             "input_size": {"width": target_size[0], "height": target_size[1]},
             "fallback": False,
             "warning": warning,
         }
-
-    def _preprocess(self, image_array, tf):
-        mode = self.settings.cnn_preprocess_mode
-        if mode == "scale_01":
-            return image_array / 255.0
-        if mode == "efficientnet":
-            return tf.keras.applications.efficientnet.preprocess_input(image_array)
-        return image_array
 
     def _humanize_label(self, label: str) -> str:
         return label.replace("-", " ").replace("_", " ").strip().title()
 
     def _fallback_classification(self, message: str) -> dict:
         labels = self._load_labels(5)
-        ranked = []
-        base_scores = [0.34, 0.24, 0.18, 0.14, 0.10]
-
-        for index, label in enumerate(labels[:5]):
-            ranked.append(
-                {
-                    "label": label,
-                    "display_label": self._humanize_label(label),
-                    "confidence": base_scores[index],
-                }
-            )
-
-        top_prediction = ranked[0]
+        ranked = [
+            {
+                "label": labels[i],
+                "display_label": self._humanize_label(labels[i]),
+                "confidence": score,
+            }
+            for i, score in enumerate([0.34, 0.24, 0.18, 0.14, 0.10])
+            if i < len(labels)
+        ]
+        top = ranked[0]
         return {
-            "label": top_prediction["label"],
-            "display_label": top_prediction["display_label"],
-            "confidence": top_prediction["confidence"],
+            "label": top["label"],
+            "display_label": top["display_label"],
+            "confidence": top["confidence"],
             "top_predictions": ranked,
             "tta_runs": 0,
             "preprocess_mode": "fallback",
+            "entropy": 0.0,
+            "entropy_ratio": 0.0,
             "input_size": {"width": 300, "height": 300},
             "fallback": True,
             "warning": message,
