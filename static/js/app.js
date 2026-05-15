@@ -541,6 +541,50 @@ function renderAdvice(llm) {
   }
 
   // -------------------------------------------------------
+  // Giai đoạn bệnh
+  // -------------------------------------------------------
+  const diseaseStageSection = document.getElementById("diseaseStageSection");
+  const diseaseStageText = document.getElementById("diseaseStageText");
+  if (diseaseStageSection && diseaseStageText) {
+    if (llm.disease_stage) {
+      diseaseStageText.textContent = llm.disease_stage;
+      diseaseStageSection.style.display = "";
+    } else {
+      diseaseStageSection.style.display = "none";
+    }
+  }
+
+  // -------------------------------------------------------
+  // Bộ phận bị ảnh hưởng
+  // -------------------------------------------------------
+  const affectedPartsSection = document.getElementById("affectedPartsSection");
+  const affectedPartsList = document.getElementById("affectedPartsList");
+  if (affectedPartsSection && affectedPartsList) {
+    const parts = llm.affected_parts || [];
+    if (parts.length > 0) {
+      renderList(affectedPartsList, parts);
+      affectedPartsSection.style.display = "";
+    } else {
+      affectedPartsSection.style.display = "none";
+    }
+  }
+
+  // -------------------------------------------------------
+  // Sản phẩm / thuốc điều trị khuyến nghị
+  // -------------------------------------------------------
+  const recommendedProductsSection = document.getElementById("recommendedProductsSection");
+  const recommendedProductsList = document.getElementById("recommendedProductsList");
+  if (recommendedProductsSection && recommendedProductsList) {
+    const prods = llm.recommended_products || [];
+    if (prods.length > 0) {
+      renderList(recommendedProductsList, prods);
+      recommendedProductsSection.style.display = "";
+    } else {
+      recommendedProductsSection.style.display = "none";
+    }
+  }
+
+  // -------------------------------------------------------
   // Mức độ lây lan + ảnh hưởng kinh tế
   // -------------------------------------------------------
   if (elements.spreadLevel) {
@@ -582,10 +626,10 @@ function renderAdvice(llm) {
   if (elements.diagnosisBadge) {
     if (llm.final_diagnosis) {
       const _diagnosisMap = {
-        cassava_bacterial_blight: "CBB (Bệnh bạc/cháy lá do vi khuẩn)",
-        cassava_brown_streak_disease: "CBSD (Bệnh vằn, sọc nâu/rỉ sắt trên lá)",
-        cassava_green_mottle: "CGM (Bệnh đốm xanh lá)",
-        cassava_mosaic_disease: "CMD (Bệnh khảm lá)",
+        cassava_bacterial_blight: "Cassava Bacterial Blight (Bệnh bạc, cháy lá do vi khuẩn)",
+        cassava_brown_streak_disease: "Cassava Brown Streak Disease (Bệnh vằn, sọc nâu lá)",
+        cassava_green_mottle: "Cassava Green Mottle (Bệnh đốm xanh lá)",
+        cassava_mosaic_disease: "Cassava Mosaic Disease (Bệnh khảm lá)",
         healthy: "Healthy (Khỏe mạnh)",
       };
       const displayName = _diagnosisMap[llm.final_diagnosis] || llm.final_diagnosis.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());

@@ -154,11 +154,12 @@ class LlmAdviceService:
         if ratios:
             visual_hint = (
                 f"\n• Phân tích màu sắc ảnh (pixel-level): "
-                f"xanh={ratios.get('green', 0):.0%}, "
-                f"vàng/khảm={ratios.get('yellow_mosaic', 0):.0%}, "
-                f"xanh nhạt={ratios.get('pale_mottle', 0):.0%}, "
-                f"nâu/đốm={ratios.get('brown_spot', 0):.0%}, "
-                f"rỉ/cam={ratios.get('rust_orange', 0):.0%}, "
+                f"xanh lá={ratios.get('green', 0):.0%}, "
+                f"vàng/khảm(CMD)={ratios.get('yellow_mosaic', 0):.0%}, "
+                f"xanh nhạt(CGM)={ratios.get('pale_mottle', 0):.0%}, "
+                f"nâu/đốm(CBB)={ratios.get('brown_spot', 0):.0%}, "
+                f"rỉ cam đậm(CBSD)={ratios.get('rust_orange', 0):.0%}, "
+                f"vàng cam nhạt(CBSD)={ratios.get('cbsd_light', 0):.0%}, "
                 f"hoại tử tối={ratios.get('dark_necrosis', 0):.0%}, "
                 f"biến thiên màu={ratios.get('color_variation', 0):.0%}"
             )
@@ -176,16 +177,17 @@ class LlmAdviceService:
         yolo_found = "Có" if detection["found"] else "Không – phân tích toàn bộ ảnh gốc"
 
         return f"""
-Bạn là chuyên gia bệnh học thực vật cấp cao với 20 năm kinh nghiệm. Nhiệm vụ: phân tích hình ảnh lá cây thực tế, chẩn đoán bệnh chính xác và đưa ra nội dung tư vấn CHI TIẾT, ĐẦY ĐỦ, DÀI để người dùng có thể dùng làm tài liệu tham khảo.
+Bạn là chuyên gia bệnh học thực vật cấp cao với 20 năm kinh nghiệm. Nhiệm vụ: phân tích hình ảnh lá cây thực tế, chẩn đoán bệnh chính xác và đưa ra nội dung tư vấn CHI TIẾT, ĐẦY ĐỦ, DÀI để người dùng có thể dùng làm tài liệu tham khảo đáng tin cậy.
 
 YÊU CẦU ĐỘ DÀI — BẮT BUỘC TUÂN THỦ:
-• summary: TỐI THIỂU 120 từ — mô tả đầy đủ triệu chứng, mức độ, nhóm bệnh và lý do
-• disease_evidence: TỐI THIỂU 80 từ — giải thích bằng chứng hình ảnh cụ thể
-• causes: TỐI THIỂU 100 từ — tác nhân gây bệnh, cơ chế, đường lây
-• favorable_conditions: TỐI THIỂU 100 từ — điều kiện thời tiết, môi trường, canh tác
-• care_steps: TỐI THIỂU 7 bước, mỗi bước TỐI THIỂU 20 từ
-• prevention: TỐI THIỂU 6 biện pháp, mỗi biện pháp TỐI THIỂU 20 từ
-• recommendations: TỐI THIỂU 5 khuyến nghị, mỗi mục TỐI THIỂU 20 từ
+• summary: TỐI THIỂU 150 từ — mô tả đầy đủ triệu chứng, mức độ, nhóm bệnh và lý do kết luận
+• disease_evidence: TỐI THIỂU 100 từ — giải thích bằng chứng hình ảnh cụ thể và đối chiếu với các nhóm bệnh khác
+• causes: TỐI THIỂU 130 từ — tên khoa học tác nhân, cơ chế, đường lây, thời gian ủ bệnh
+• favorable_conditions: TỐI THIỂU 130 từ — điều kiện thời tiết, môi trường, canh tác chi tiết
+• care_steps: TỐI THIỂU 8 bước, mỗi bước TỐI THIỂU 25 từ
+• prevention: TỐI THIỂU 6 biện pháp, mỗi biện pháp TỐI THIỂU 25 từ
+• recommendations: TỐI THIỂU 5 khuyến nghị, mỗi mục TỐI THIỂU 25 từ
+• recommended_products: TỐI THIỂU 3 sản phẩm/thuốc cụ thể với tên thương mại + liều dùng
 • Nếu viết quá ngắn — kết quả sẽ bị từ chối và yêu cầu viết lại
 
 QUY ƯỚC NGÔN NGỮ BẮT BUỘC:
@@ -222,15 +224,18 @@ Mô hình CNN (EfficientNetB3, {tta_runs} lần TTA, mode={preprocess_mode}):
 {top_predictions}
 
 ═══════════════════════════════════════════════
-BƯỚC 3 — KẾT LUẬN (QUAN SÁT ẢNH LÀ NGUỒN CHÍNH)
+BƯỚC 3 — KẾT LUẬN (QUAN SÁT ẢNH LÀ NGUỒN CHÍNH — KHÔNG ĐƯỢC SAO CHÉP CNN)
 ═══════════════════════════════════════════════
-QUY TẮC BẮT BUỘC:
+⚠️ CẢNH BÁO QUAN TRỌNG: CNN CÓ THỂ SAI. Bạn PHẢI tự quan sát ảnh và đưa ra kết luận độc lập.
 
-• LUÔN ưu tiên những gì bạn THỰC SỰ THẤY trong ảnh để quyết định final_diagnosis.
+TRƯỚC KHI điền final_diagnosis, hãy xác nhận 3 bằng chứng hình ảnh cụ thể bạn THỰC SỰ THẤY trong ảnh. Chỉ điền final_diagnosis sau khi đã có đủ 3 bằng chứng đó.
+
+QUY TẮC BẮT BUỘC:
+• final_diagnosis LUÔN LUÔN dựa vào những gì bạn thấy trong ảnh — KHÔNG bao giờ chỉ copy CNN.
 • Nếu quan sát ảnh và CNN TRÙNG KHỚP → cnn_agreement = "agree".
-• Nếu quan sát ảnh KHÁC CNN → final_diagnosis = theo quan sát ảnh, cnn_agreement = "disagree", giải thích rõ trong disease_evidence.
-• Nếu ảnh không đủ rõ để kết luận → cnn_agreement = "uncertain", dùng CNN làm tham khảo và ghi rõ trong warning.
-• KHÔNG được chỉ sao chép kết quả CNN mà không xem xét ảnh thực tế.
+• Nếu quan sát ảnh KHÁC CNN → final_diagnosis = theo quan sát ảnh, cnn_agreement = "disagree", giải thích rõ trong disease_evidence tại sao ảnh cho thấy kết luận khác CNN.
+• Nếu ảnh không đủ rõ → cnn_agreement = "uncertain", dùng CNN làm tham khảo và ghi rõ trong warning.
+• Ví dụ: CNN bảo CMD nhưng ảnh thấy rõ vệt cam-rỉ dọc gân → final_diagnosis = "cassava_brown_streak_disease", cnn_agreement = "disagree".
 
 ═══════════════════════════════════════════════
 YÊU CẦU ĐẦU RA — JSON TIẾNG VIỆT HỢP LỆ
@@ -299,7 +304,16 @@ YÊU CẦU ĐẦU RA — JSON TIẾNG VIỆT HỢP LỆ
     "7_ngày": "Mô tả cụ thể mức độ nghiêm trọng và ảnh hưởng đến toàn cây sau 7 ngày không can thiệp",
     "14_ngày": "Mô tả khả năng lây lan sang cây khác và thiệt hại tổng thể sau 14 ngày không can thiệp",
     "30_ngày": "Mô tả hậu quả nghiêm trọng và thiệt hại kinh tế nếu để bệnh phát triển tự nhiên trong 1 tháng"
-  }}
+  }},
+  "disease_stage": "Giai đoạn bệnh hiện tại dựa trên diện tích và mức độ tổn thương quan sát được trong ảnh. Chỉ rõ: 'Giai đoạn đầu — triệu chứng mới xuất hiện, dưới 20% diện tích lá bị ảnh hưởng' hoặc 'Giai đoạn giữa — triệu chứng rõ ràng, 20-60% diện tích lá bị ảnh hưởng' hoặc 'Giai đoạn nặng — triệu chứng nghiêm trọng, trên 60% diện tích lá bị ảnh hưởng, nguy cơ lan sang cây khác cao'. Giải thích ngắn gọn tại sao xếp vào giai đoạn đó.",
+  "affected_parts": [
+    "Liệt kê cụ thể từng bộ phận lá bị ảnh hưởng quan sát thấy trong ảnh: lá non / lá trưởng thành / lá già, gân chính / gân phụ, mép lá, cuống lá, bề mặt lá (trên/dưới), v.v. Mỗi mục mô tả rõ loại tổn thương trên bộ phận đó (đổi màu / hoại tử / biến dạng...)."
+  ],
+  "recommended_products": [
+    "Sản phẩm 1: Tên thương mại + hoạt chất chính + loại (thuốc trừ khuẩn/kháng virus/kháng nấm/phân bón vi lượng) + liều lượng pha + cách dùng (phun lá/tưới gốc) + số lần xử lý khuyến nghị.",
+    "Sản phẩm 2: Tương tự cấu trúc trên, ưu tiên sản phẩm khác nhóm hoạt chất để tránh kháng thuốc.",
+    "Sản phẩm 3: Sản phẩm bổ sung sức đề kháng / phân bón hỗ trợ phục hồi (kali, canxi, vi lượng) với liều dùng cụ thể."
+  ]
 }}
 """.strip()
 
@@ -328,6 +342,9 @@ YÊU CẦU ĐẦU RA — JSON TIẾNG VIỆT HỢP LỆ
             "causes": str(data.get("causes", "")).strip(),
             "favorable_conditions": str(data.get("favorable_conditions", "")).strip(),
             "prevention": [str(i).strip() for i in data.get("prevention", []) if str(i).strip()],
+            "disease_stage": str(data.get("disease_stage", "")).strip(),
+            "affected_parts": [str(i).strip() for i in data.get("affected_parts", []) if str(i).strip()],
+            "recommended_products": [str(i).strip() for i in data.get("recommended_products", []) if str(i).strip()],
         }
 
     def _sanitize_text(self, value: str) -> str:
@@ -421,4 +438,7 @@ YÊU CẦU ĐẦU RA — JSON TIẾNG VIỆT HỢP LỆ
             "disease_evidence": "",
             "causes": "Có thể liên quan đến tác nhân gây bệnh trên lá hoặc điều kiện môi trường làm mô lá suy yếu. Cần đối chiếu thêm dấu hiệu thực địa để xác nhận.",
             "favorable_conditions": "Độ ẩm cao, lá ướt lâu, vườn kém thông thoáng và cây suy dinh dưỡng thường làm triệu chứng phát triển nhanh hơn.",
+            "disease_stage": "",
+            "affected_parts": [],
+            "recommended_products": [],
         })

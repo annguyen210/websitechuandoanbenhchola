@@ -30,7 +30,8 @@
       "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('Server OK:', d.get\\('status'\\)\\)\")",
       "Bash(python -c \"import app; print\\('OK'\\)\")",
       "PowerShell(Start-Process python -ArgumentList \"app.py\" -WorkingDirectory \"C:\\\\Users\\\\Admin\\\\Documents\\\\tinhoctre\\(2\\) - Copy - Copy\" -WindowStyle Normal)",
-      "Bash(pkill -f \"python app.py\")"
+      "Bash(pkill -f \"python app.py\")",
+      "Bash(python -m json.tool)"
     ]
   }
 }

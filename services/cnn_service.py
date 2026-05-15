@@ -203,41 +203,49 @@ class CnnClassificationService:
         pale_ratio = pct(pale_px)
 
         # CBB (Bacterial Blight — Đốm lá vi khuẩn): nâu tối, góc lá
-        brown_px = (r_ch > g_ch + 0.04) & (r_ch > b_ch + 0.08) & (val > 0.10) & (val < 0.72) & (sat > 0.14)
+        # Thêm điều kiện g_ch < b_ch * 1.45 để loại trừ pixel cam/rỉ sắt của CBSD (vốn có g >> b)
+        brown_px = (r_ch > g_ch + 0.04) & (r_ch > b_ch + 0.08) & (g_ch < b_ch * 1.45) & (val > 0.10) & (val < 0.72) & (sat > 0.14)
         brown_ratio = pct(brown_px)
         dark_px = (val < 0.22) & (sat > 0.07)
         necrosis_ratio = pct(dark_px)
 
-        # CBSD (Brown Streak — Rỉ sắt/sọc nâu): cam-rỉ dọc gân
+        # CBSD (Brown Streak — Rỉ sắt/sọc nâu): cam-rỉ đậm dọc gân
         rust_px = (r_ch > 0.44) & (r_ch > g_ch * 1.20) & (g_ch > b_ch * 1.10) & (sat > 0.26) & (val > 0.26)
         rust_ratio = pct(rust_px)
+        # CBSD nhạt hơn: vùng vàng-cam dọc gân (CBSD sớm hoặc chuyển màu), g >> b là đặc điểm phân biệt với CBB
+        cbsd_light_px = (r_ch > 0.38) & (g_ch > 0.25) & (b_ch < 0.22) & (r_ch > g_ch * 1.12) & (g_ch > b_ch * 1.40) & (val > 0.25)
+        cbsd_light_ratio = pct(cbsd_light_px)
 
-        lesion_total = min(1.0, brown_ratio + rust_ratio + necrosis_ratio)
+        lesion_total = min(1.0, brown_ratio + rust_ratio + cbsd_light_ratio * 0.5 + necrosis_ratio)
         mottling_total = min(1.0, yellow_ratio + pale_ratio)
 
         # Tính điểm cơ bản từ đặc trưng màu sắc pixel
         scores = {
             "healthy": max(0.01, green_ratio * 1.50 - lesion_total * 2.20 - yellow_ratio * 1.10),
-            "cassava_bacterial_blight": max(0.01, brown_ratio * 2.50 + necrosis_ratio * 2.10 + yellow_ratio * 0.20),
-            "cassava_brown_streak_disease": max(0.01, rust_ratio * 2.90 + brown_ratio * 0.65),
-            "cassava_green_mottle": max(0.01, pale_ratio * 2.30 + color_var * 0.55),
-            "cassava_mosaic_disease": max(0.01, yellow_ratio * 2.10 + color_var * 1.50 + pale_ratio * 0.30),
+            "cassava_bacterial_blight": max(0.01, brown_ratio * 2.70 + necrosis_ratio * 2.20 + yellow_ratio * 0.15),
+            "cassava_brown_streak_disease": max(0.01, rust_ratio * 3.10 + cbsd_light_ratio * 1.40 + brown_ratio * 0.20),
+            "cassava_green_mottle": max(0.01, pale_ratio * 2.40 + color_var * 0.50),
+            "cassava_mosaic_disease": max(0.01, yellow_ratio * 2.20 + color_var * 1.60 + pale_ratio * 0.25),
         }
 
         # Boost rõ ràng cho từng pattern đặc trưng
         if green_ratio > 0.62 and lesion_total < 0.04 and yellow_ratio < 0.07:
             scores["healthy"] += 0.55
         if yellow_ratio > 0.10 and lesion_total < 0.10:
-            scores["cassava_mosaic_disease"] += 0.45
+            scores["cassava_mosaic_disease"] += 0.50
             scores["cassava_green_mottle"] += 0.10
         if pale_ratio > 0.14 and yellow_ratio < 0.12 and lesion_total < 0.08:
-            scores["cassava_green_mottle"] += 0.40
+            scores["cassava_green_mottle"] += 0.45
         if brown_ratio + necrosis_ratio > 0.05:
-            scores["cassava_bacterial_blight"] += 0.50
-        if rust_ratio > 0.03:
-            scores["cassava_brown_streak_disease"] += 0.60
+            scores["cassava_bacterial_blight"] += 0.55
+        if rust_ratio > 0.03 or cbsd_light_ratio > 0.06:
+            scores["cassava_brown_streak_disease"] += 0.65
+        # Phân biệt CBSD vs CBB khi cả hai đều xuất hiện: cam/rỉ nhiều hơn nâu → CBSD
+        if (rust_ratio + cbsd_light_ratio) > brown_ratio and (rust_ratio > 0.02 or cbsd_light_ratio > 0.04):
+            scores["cassava_brown_streak_disease"] += 0.30
+            scores["cassava_bacterial_blight"] = max(0.01, scores["cassava_bacterial_blight"] - 0.15)
         if color_var > 0.08 and yellow_ratio > 0.07:
-            scores["cassava_mosaic_disease"] += 0.30
+            scores["cassava_mosaic_disease"] += 0.32
 
         ordered = [scores.get(label, 0.01) for label in labels]
         visual_probs = self._normalize_probs(ordered)
@@ -260,6 +268,7 @@ class CnnClassificationService:
                 "yellow_mosaic": round(yellow_ratio, 4),
                 "brown_spot": round(brown_ratio, 4),
                 "rust_orange": round(rust_ratio, 4),
+                "cbsd_light": round(cbsd_light_ratio, 4),
                 "dark_necrosis": round(necrosis_ratio, 4),
                 "color_variation": round(color_var, 4),
             },
@@ -279,18 +288,23 @@ class CnnClassificationService:
         visual_probs: list[float],
         visual_evidence: dict,
         model_entropy_ratio: float = 0.0,
+        model_top_conf: float = 0.0,
     ) -> list[float]:
         strength = float(visual_evidence.get("evidence_strength", 0.0) or 0.0)
 
         if model_entropy_ratio > 0.80:
-            # CNN phân vân cao — CNN vẫn đóng góp 20%, visual 80%, sharpen để phân tách rõ
-            cnn_w, vis_w = 0.20, 0.80
+            # CNN gần như ngẫu nhiên — dựa chủ yếu vào visual
+            cnn_w, vis_w = 0.15, 0.85
         elif model_entropy_ratio > 0.60:
-            # CNN kém tin cậy — CNN 35%, visual 65%
-            cnn_w, vis_w = 0.35, 0.65
+            # CNN kém tin cậy — ưu tiên visual
+            cnn_w, vis_w = 0.30, 0.70
+        elif model_top_conf > 0.72:
+            # CNN rất tự tin → giảm ảnh hưởng visual, chỉ dùng visual như hiệu chỉnh nhỏ
+            vis_w = 0.12 + min(0.18, strength * 0.25)
+            cnn_w = 1.0 - vis_w
         else:
             # CNN ổn định — blend theo strength của visual evidence
-            vis_w = 0.25 + min(0.40, strength * 0.55)
+            vis_w = 0.22 + min(0.35, strength * 0.50)
             cnn_w = 1.0 - vis_w
 
         calibrated = [cnn_w * mp + vis_w * vp for mp, vp in zip(model_probs, visual_probs)]
@@ -340,9 +354,10 @@ class CnnClassificationService:
         model_entropy_ratio = self._entropy(model_probs) / max_entropy
 
         labels = self._load_labels(n_classes)
+        model_top_conf = max(model_probs) if model_probs else 0.0
         visual_probs, visual_evidence = self._visual_symptom_scores(original_image, labels, np)
         averaged = self._calibrate_with_visual_symptoms(
-            model_probs, visual_probs, visual_evidence, model_entropy_ratio
+            model_probs, visual_probs, visual_evidence, model_entropy_ratio, model_top_conf
         )
 
         entropy_val = self._entropy(averaged)
@@ -410,11 +425,11 @@ class CnnClassificationService:
 
     def _humanize_label(self, label: str) -> str:
         _label_map = {
-            "cassava_bacterial_blight": "cassava_bacterial_blight (Bệnh bạc/cháy lá do vi khuẩn)",
-            "cassava_brown_streak_disease": "cassava_brown_streak_disease (Bệnh vằn, sọc nâu/rỉ sắt trên lá)",
-            "cassava_green_mottle": "cassava_green_mottle (Bệnh đốm xanh lá)",
-            "cassava_mosaic_disease": "cassava_mosaic_disease (Bệnh khảm lá)",
-            "healthy": "healthy (Khỏe mạnh)",
+            "cassava_bacterial_blight": "Cassava Bacterial Blight (Bệnh bạc, cháy lá do vi khuẩn)",
+            "cassava_brown_streak_disease": "Cassava Brown Streak Disease (Bệnh vằn, sọc nâu lá)",
+            "cassava_green_mottle": "Cassava Green Mottle (Bệnh đốm xanh lá)",
+            "cassava_mosaic_disease": "Cassava Mosaic Disease (Bệnh khảm lá)",
+            "healthy": "Healthy (Khỏe mạnh)",
         }
         return _label_map.get(label, label)
 
