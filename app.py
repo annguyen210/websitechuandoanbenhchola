@@ -1,6 +1,20 @@
+# ============================================================
+# File: app.py
+# Vai trò: Entry point của ứng dụng Flask — định nghĩa tất cả HTTP endpoints
+#
+# Các endpoint chính:
+#   GET  /              → Trang chủ (giao diện người dùng)
+#   GET  /api/health    → Kiểm tra trạng thái server và các dependency
+#   POST /api/analyze   → Nhận ảnh upload → chạy pipeline YOLO→CNN→Gemini → trả kết quả
+#   POST /api/report    → Sinh báo cáo HTML để người dùng tải về
+#   POST /api/qr        → Tạo mã QR chứa tóm tắt kết quả chẩn đoán
+#   GET  /uploads/...   → Phục vụ file ảnh đã xử lý (crop, annotated, original)
+# ============================================================
+
 import os
 
-# Limit CPU threads to prevent deadlock / timeout on low-vCPU instances
+# Giới hạn số luồng CPU cho các thư viện tính toán (OpenMP, MKL, OpenBLAS)
+# để tránh deadlock và timeout trên máy chủ có ít vCPU
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
@@ -8,7 +22,7 @@ os.environ["OPENBLAS_NUM_THREADS"] = "1"
 import base64
 import io
 from datetime import datetime
-from pathlib import Path 
+from pathlib import Path
 import importlib.util
 
 from flask import Flask, jsonify, render_template, request, send_from_directory, url_for, Response
@@ -19,23 +33,33 @@ from services.exceptions import AppError
 from services.pipeline import AnalysisPipeline
 
 
+# Khởi tạo cấu hình và pipeline — thực hiện một lần khi app khởi động
 settings = get_settings()
-app = Flask( 
+app = Flask(
     __name__,
     template_folder=str(settings.base_dir / "templates"),
     static_folder=str(settings.base_dir / "static"),
 )
+
+# Giới hạn kích thước file upload theo cấu hình (mặc định 10MB)
 app.config["MAX_CONTENT_LENGTH"] = settings.max_upload_size_mb * 1024 * 1024
+
+# Pipeline phân tích ảnh — dùng chung cho tất cả request
 pipeline = AnalysisPipeline(settings)
 
 
 def asset_url(relative_path: str | None) -> str | None:
+    """Chuyển đường dẫn tương đối của ảnh thành URL đầy đủ để client truy cập."""
     if not relative_path:
         return None
     return url_for("uploaded_file", filename=relative_path)
 
 
 def attach_urls(payload: dict) -> dict:
+    """
+    Chuyển đổi các đường dẫn ảnh tương đối trong kết quả pipeline
+    thành URL đầy đủ để frontend có thể hiển thị trực tiếp.
+    """
     images = payload.get("images", {})
     payload["images"] = {
         "original": asset_url(images.get("original")),
@@ -45,13 +69,24 @@ def attach_urls(payload: dict) -> dict:
     return payload
 
 
+# --- Endpoint trang chủ ---
 @app.get("/")
 def index() -> str:
+    """Phục vụ trang HTML chính — giao diện người dùng upload và xem kết quả."""
     return render_template("index.html", app_name=settings.app_name)
 
 
+# --- Endpoint kiểm tra sức khỏe server ---
 @app.get("/api/health")
 def health() -> tuple[dict, int]:
+    """
+    Kiểm tra trạng thái các dependency quan trọng:
+    - YOLO model file có tồn tại không
+    - CNN model file có tồn tại không
+    - Gemini API key đã cấu hình chưa
+    - ultralytics và tensorflow đã cài chưa
+    Dùng để hiển thị badge trạng thái trên giao diện.
+    """
     ultralytics_ready = importlib.util.find_spec("ultralytics") is not None
     tensorflow_ready = importlib.util.find_spec("tensorflow") is not None
     return (
@@ -74,8 +109,13 @@ def health() -> tuple[dict, int]:
     )
 
 
+# --- Endpoint phân tích ảnh chính ---
 @app.post("/api/analyze")
 def analyze() -> tuple[dict, int]:
+    """
+    Nhận ảnh upload từ form multipart, chạy toàn bộ pipeline YOLO→CNN→Gemini.
+    Trả về JSON chứa kết quả phân loại, tư vấn và đường dẫn ảnh đã xử lý.
+    """
     image = request.files.get("image")
     if image is None or not image.filename:
         return jsonify({"success": False, "error": "Vui lòng tải lên một ảnh lá cây."}), 400
@@ -98,13 +138,21 @@ def analyze() -> tuple[dict, int]:
     return jsonify({"success": True, "result": attach_urls(result)}), 200
 
 
+# --- Phục vụ file ảnh đã upload/xử lý ---
 @app.get("/uploads/<path:filename>")
 def uploaded_file(filename: str):
+    """Phục vụ ảnh từ thư mục uploads (original, crop, annotated) cho frontend."""
     return send_from_directory(settings.upload_dir, filename)
 
 
+# --- Endpoint sinh báo cáo HTML ---
 @app.post("/api/report")
 def generate_report() -> tuple[Response, int]:
+    """
+    Sinh file báo cáo HTML đầy đủ từ kết quả phân tích.
+    Nhúng ảnh gốc dạng base64 vào HTML để báo cáo tự chứa (standalone).
+    Người dùng có thể tải về và mở offline.
+    """
     data = request.get_json(force=True, silent=True) or {}
     result = data.get("result", data)
 
@@ -117,7 +165,6 @@ def generate_report() -> tuple[Response, int]:
     health_score = int(llm.get("health_score", 50))
     headline = llm.get("headline", cnn_label)
     summary = llm.get("summary", "")
-    plant_type = llm.get("plant_type", "-")
     spread_level = llm.get("spread_level", "-")
     economic_impact = llm.get("economic_impact", "-")
     care_steps = llm.get("care_steps", [])
@@ -208,7 +255,6 @@ def generate_report() -> tuple[Response, int]:
         <div class="label">Kết quả CNN</div>
         <div class="value">{headline}</div>
         <div class="sub">Lớp phân loại: {cnn_label} &nbsp;|&nbsp; Độ tin cậy: {cnn_conf}%</div>
-        <div class="sub" style="margin-top:4px;">Loại cây: {plant_type}</div>
         <div class="label" style="margin-top:14px;">Điểm sức khỏe cây</div>
         <div class="score-wrap">
           <div class="score-bar"><div class="score-fill"></div></div>
@@ -257,14 +303,19 @@ def generate_report() -> tuple[Response, int]:
     )
 
 
+# --- Endpoint tạo mã QR ---
 @app.post("/api/qr")
 def generate_qr() -> tuple[dict, int]:
+    """
+    Tạo mã QR từ tóm tắt kết quả chẩn đoán.
+    Người dùng có thể quét QR để chia sẻ nhanh thông tin kết quả.
+    Trả về ảnh QR dạng base64 PNG.
+    """
     data = request.get_json(force=True, silent=True) or {}
 
     cnn_label = data.get("cnn_label", "Không xác định")
     cnn_conf = data.get("cnn_conf", 0)
     health_score = data.get("health_score", 50)
-    plant_type = data.get("plant_type", "-")
     summary = data.get("summary", "")
     now = datetime.now().strftime("%d/%m/%Y %H:%M")
 
@@ -274,7 +325,6 @@ def generate_qr() -> tuple[dict, int]:
         f"Bệnh/Tình trạng: {cnn_label}\n"
         f"Độ tin cậy CNN: {cnn_conf:.0f}%\n"
         f"Điểm sức khỏe: {health_score}/100\n"
-        f"Loại cây: {plant_type}\n"
         f"Tóm tắt: {summary[:120] if summary else 'Không có'}"
     )
 
@@ -304,8 +354,10 @@ def generate_qr() -> tuple[dict, int]:
         return jsonify({"success": False, "error": f"Không thể tạo QR Code: {exc}"}), 500
 
 
+# --- Xử lý lỗi toàn cục ---
 @app.errorhandler(RequestEntityTooLarge)
 def handle_large_file(_: RequestEntityTooLarge) -> tuple[dict, int]:
+    """Trả về lỗi 413 khi file upload vượt giới hạn kích thước."""
     return (
         jsonify(
             {

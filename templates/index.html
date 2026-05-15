@@ -196,10 +196,38 @@
             </div>
             <div class="warning-box" id="llmWarning">-</div>
             <div id="additionalInfo" class="additional-info">
-              <div class="info-section">
-                <h4>Loại cây:</h4>
-                <p id="plantType">-</p>
+
+              <!-- Quan sát trực quan từ Gemini khi phân tích ảnh -->
+              <div class="info-section" id="visualObsSection" style="display:none;">
+                <h4>Quan sát hình ảnh (Gemini):</h4>
+                <ul id="visualObservations"></ul>
               </div>
+
+              <!-- Nguyên nhân gây bệnh — luôn hiển thị -->
+              <div class="info-section">
+                <h4>Nguyên nhân gây bệnh:</h4>
+                <p id="causesText" style="color:#374151;line-height:1.7;">-</p>
+              </div>
+
+              <!-- Điều kiện thuận lợi — luôn hiển thị -->
+              <div class="info-section">
+                <h4>Điều kiện thuận lợi phát sinh:</h4>
+                <p id="favorableConditions" style="color:#374151;line-height:1.7;">-</p>
+              </div>
+
+              <!-- Biện pháp phòng ngừa — luôn hiển thị -->
+              <div class="info-section">
+                <h4>Biện pháp phòng ngừa:</h4>
+                <ul id="preventionList"></ul>
+              </div>
+
+              <!-- Khuyến nghị bổ sung — luôn hiển thị -->
+              <div class="info-section">
+                <h4>Khuyến nghị thêm:</h4>
+                <ul id="recommendations"></ul>
+              </div>
+
+              <!-- Mức độ lây lan và ảnh hưởng kinh tế -->
               <div class="info-section">
                 <h4>Mức độ lây lan:</h4>
                 <p id="spreadLevel">-</p>
@@ -208,22 +236,19 @@
                 <h4>Ảnh hưởng kinh tế:</h4>
                 <p id="economicImpact">-</p>
               </div>
+
+              <!-- Lịch điều trị theo mốc ngày -->
               <div class="info-section">
                 <h4>Lịch điều trị:</h4>
                 <ul id="treatmentSchedule"></ul>
               </div>
+
+              <!-- Dự báo diễn biến bệnh nếu không xử lý -->
               <div class="info-section">
                 <h4>Dự báo diễn biến bệnh:</h4>
                 <div id="diseaseProgression"></div>
               </div>
-              <div class="info-section" id="visualObsSection" style="display:none;">
-                <h4>Quan sát trực quan từ ảnh (Gemini):</h4>
-                <ul id="visualObservations"></ul>
-              </div>
-              <div class="info-section" id="recommendationsSection" style="display:none;">
-                <h4>Khuyến nghị thêm:</h4>
-                <ul id="recommendations"></ul>
-              </div>
+
             </div>
             <div class="action-buttons">
               <button id="shareReportBtn" class="secondary-button btn-report" type="button">

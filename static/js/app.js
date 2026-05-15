@@ -1,3 +1,24 @@
+// ============================================================
+// File: static/js/app.js
+// Vai trò: Toàn bộ logic frontend của ứng dụng LeafAI
+//
+// Các chức năng chính:
+//   - Xử lý drag-and-drop và chọn file ảnh từ người dùng
+//   - Gọi API /api/analyze để gửi ảnh lên server phân tích
+//   - Hiển thị kết quả CNN (phân loại nhóm bệnh + % tin cậy)
+//   - Hiển thị kết quả Gemini (chẩn đoán, tư vấn, phòng ngừa...)
+//   - Tải báo cáo HTML qua /api/report
+//   - Tạo mã QR tóm tắt qua /api/qr
+//   - Kiểm tra trạng thái server qua /api/health
+// ============================================================
+
+// -------------------------------------------------------
+// state: Lưu trạng thái toàn cục của ứng dụng
+//   - file: file ảnh người dùng chọn
+//   - previewUrl: URL blob để hiển thị preview
+//   - result: kết quả phân tích từ server
+//   - qrDataUrl: ảnh QR dạng base64
+// -------------------------------------------------------
 const state = {
   file: null,
   previewUrl: "",
@@ -5,6 +26,10 @@ const state = {
   qrDataUrl: "",
 };
 
+// -------------------------------------------------------
+// elements: Cache tham chiếu đến các DOM element thường dùng
+// Giúp tránh querySelector lặp lại nhiều lần gây chậm
+// -------------------------------------------------------
 const elements = {
   fileInput: document.getElementById("fileInput"),
   dropzone: document.getElementById("dropzone"),
@@ -37,7 +62,6 @@ const elements = {
   llmWarning: document.getElementById("llmWarning"),
   healthScoreBar: document.getElementById("healthScoreBar"),
   healthScoreValue: document.getElementById("healthScoreValue"),
-  plantType: document.getElementById("plantType"),
   spreadLevel: document.getElementById("spreadLevel"),
   economicImpact: document.getElementById("economicImpact"),
   treatmentSchedule: document.getElementById("treatmentSchedule"),
@@ -51,6 +75,10 @@ const elements = {
   recommendationsSection: document.getElementById("recommendationsSection"),
 };
 
+// -------------------------------------------------------
+// basePipeline: Danh sách 3 bước pipeline mặc định
+// Hiển thị cho người dùng thấy luồng xử lý trước khi phân tích
+// -------------------------------------------------------
 function basePipeline() {
   return [
     {
@@ -68,12 +96,21 @@ function basePipeline() {
   ];
 }
 
+// -------------------------------------------------------
+// init: Hàm khởi tạo ứng dụng, chạy ngay khi trang load xong
+// Render pipeline mặc định, gắn sự kiện và kiểm tra sức khỏe server
+// -------------------------------------------------------
 async function init() {
   renderPipeline(basePipeline());
   bindEvents();
   await loadHealth();
 }
 
+// -------------------------------------------------------
+// bindEvents: Gắn tất cả event listeners vào DOM elements
+// Bao gồm: upload file, drag-drop, nút phân tích, nút reset,
+// tải báo cáo, mở/đóng modal QR
+// -------------------------------------------------------
 function bindEvents() {
   if (elements.fileInput) {
     elements.fileInput.addEventListener("change", (event) => {
@@ -192,6 +229,10 @@ function resetForm() {
   renderPipeline(basePipeline());
 }
 
+// -------------------------------------------------------
+// loadHealth: Gọi /api/health để kiểm tra các dependency
+// Cập nhật badge trạng thái YOLO, CNN, Gemini trên giao diện
+// -------------------------------------------------------
 async function loadHealth() {
   try {
     const response = await fetch("/api/health");
@@ -251,6 +292,11 @@ async function loadHealth() {
   }
 }
 
+// -------------------------------------------------------
+// analyzeImage: Hàm chính gửi ảnh lên server để phân tích
+// Luồng: FormData → POST /api/analyze → nhận JSON kết quả
+// → renderImages → renderClassification → renderAdvice
+// -------------------------------------------------------
 async function analyzeImage() {
   if (!state.file) {
     return;
@@ -437,28 +483,9 @@ function renderAdvice(llm) {
     elements.healthScoreValue.textContent = healthScore;
   }
 
-  // Additional Info
-  if (elements.plantType) {
-    elements.plantType.textContent = llm.plant_type || "-";
-  }
-  if (elements.spreadLevel) {
-    elements.spreadLevel.textContent = llm.spread_level || "-";
-  }
-  if (elements.economicImpact) {
-    elements.economicImpact.textContent = llm.economic_impact || "-";
-  }
-  if (elements.treatmentSchedule) {
-    renderList(elements.treatmentSchedule, llm.treatment_schedule?.map((t) => `${t.action} (sau ${t.days_later} ngày)`));
-  }
-
-  // Disease Progression
-  if (elements.diseaseProgression && llm.disease_progression) {
-    elements.diseaseProgression.innerHTML = Object.entries(llm.disease_progression)
-      .map(([key, value]) => `<div><strong>${key}:</strong> ${escapeHtml(value)}</div>`)
-      .join("");
-  }
-
-  // Visual Observations từ Gemini (chỉ hiện khi có dữ liệu)
+  // -------------------------------------------------------
+  // Quan sát hình ảnh từ Gemini — chỉ hiện khi có dữ liệu
+  // -------------------------------------------------------
   const obsSection = document.getElementById("visualObsSection");
   const obsList = document.getElementById("visualObservations");
   if (obsSection && obsList) {
@@ -471,16 +498,104 @@ function renderAdvice(llm) {
     }
   }
 
-  // Chẩn đoán tổng hợp (final_diagnosis + cnn_agreement)
+  // -------------------------------------------------------
+  // Nguyên nhân gây bệnh — luôn hiển thị, fallback "-" nếu chưa có
+  // -------------------------------------------------------
+  const causesText = document.getElementById("causesText");
+  if (causesText) {
+    causesText.textContent = llm.causes || "-";
+  }
+
+  // -------------------------------------------------------
+  // Điều kiện thuận lợi — luôn hiển thị, fallback "-" nếu chưa có
+  // -------------------------------------------------------
+  const favorableConditions = document.getElementById("favorableConditions");
+  if (favorableConditions) {
+    favorableConditions.textContent = llm.favorable_conditions || "-";
+  }
+
+  // -------------------------------------------------------
+  // Biện pháp phòng ngừa — luôn hiển thị, fallback "(Chưa có dữ liệu)"
+  // -------------------------------------------------------
+  const preventionList = document.getElementById("preventionList");
+  if (preventionList) {
+    const prev = llm.prevention || [];
+    if (prev.length > 0) {
+      renderList(preventionList, prev);
+    } else {
+      preventionList.innerHTML = "<li style='color:#9ca3af;font-style:italic;'>Chưa có dữ liệu</li>";
+    }
+  }
+
+  // -------------------------------------------------------
+  // Khuyến nghị thêm — luôn hiển thị, fallback khi trống
+  // -------------------------------------------------------
+  const recsList = document.getElementById("recommendations");
+  if (recsList) {
+    const recs = llm.recommendations || [];
+    if (recs.length > 0) {
+      renderList(recsList, recs);
+    } else {
+      recsList.innerHTML = "<li style='color:#9ca3af;font-style:italic;'>Chưa có dữ liệu</li>";
+    }
+  }
+
+  // -------------------------------------------------------
+  // Mức độ lây lan + ảnh hưởng kinh tế
+  // -------------------------------------------------------
+  if (elements.spreadLevel) {
+    elements.spreadLevel.textContent = llm.spread_level || "-";
+  }
+  if (elements.economicImpact) {
+    elements.economicImpact.textContent = llm.economic_impact || "-";
+  }
+
+  // -------------------------------------------------------
+  // Lịch điều trị — render danh sách mốc thời gian
+  // -------------------------------------------------------
+  if (elements.treatmentSchedule) {
+    const sched = (llm.treatment_schedule || []).map((t) => `Ngày ${t.days_later}: ${t.action}`);
+    if (sched.length > 0) {
+      renderList(elements.treatmentSchedule, sched);
+    } else {
+      elements.treatmentSchedule.innerHTML = "<li style='color:#9ca3af;font-style:italic;'>Chưa có lịch điều trị</li>";
+    }
+  }
+
+  // -------------------------------------------------------
+  // Dự báo diễn biến bệnh — render từng mốc thời gian
+  // -------------------------------------------------------
+  if (elements.diseaseProgression && llm.disease_progression) {
+    const prog = llm.disease_progression;
+    if (Object.keys(prog).length > 0) {
+      elements.diseaseProgression.innerHTML = Object.entries(prog)
+        .map(([key, value]) => `<div style="margin-bottom:4px;"><strong style="color:#1a7f46;">${key}:</strong> ${escapeHtml(String(value))}</div>`)
+        .join("");
+    } else {
+      elements.diseaseProgression.innerHTML = "<p style='color:#9ca3af;font-style:italic;'>Chưa có dữ liệu dự báo</p>";
+    }
+  }
+
+  // -------------------------------------------------------
+  // Chẩn đoán tổng hợp — map final_diagnosis → tên hiển thị tiếng Việt
+  // -------------------------------------------------------
   if (elements.diagnosisBadge) {
     if (llm.final_diagnosis) {
-      const displayName = llm.final_diagnosis.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+      const _diagnosisMap = {
+        cassava_bacterial_blight: "CBB (Bệnh bạc/cháy lá do vi khuẩn)",
+        cassava_brown_streak_disease: "CBSD (Bệnh vằn, sọc nâu/rỉ sắt trên lá)",
+        cassava_green_mottle: "CGM (Bệnh đốm xanh lá)",
+        cassava_mosaic_disease: "CMD (Bệnh khảm lá)",
+        healthy: "Healthy (Khỏe mạnh)",
+      };
+      const displayName = _diagnosisMap[llm.final_diagnosis] || llm.final_diagnosis.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
       if (elements.finalDiagnosis) elements.finalDiagnosis.textContent = displayName;
       if (elements.cnnAgreementBadge) {
+        // Badge màu sắc thể hiện mức độ đồng thuận giữa CNN và Gemini
         const agreementMap = {
-          agree: { text: "✓ CNN xác nhận", bg: "#d1fae5", color: "#065f46" },
-          disagree: { text: "~ Gemini bổ sung", bg: "#fef3c7", color: "#92400e" },
-          uncertain: { text: "~ Đang đối chiếu", bg: "#f3f4f6", color: "#374151" },
+          agree:    { text: "✓ CNN xác nhận",     bg: "#d1fae5", color: "#065f46" },
+          disagree: { text: "~ Gemini bổ sung",   bg: "#fef3c7", color: "#92400e" },
+          uncertain:{ text: "~ Đang đối chiếu",   bg: "#f3f4f6", color: "#374151" },
         };
         const a = agreementMap[llm.cnn_agreement] || { text: llm.cnn_agreement || "-", bg: "#f3f4f6", color: "#374151" };
         elements.cnnAgreementBadge.textContent = a.text;
@@ -493,7 +608,9 @@ function renderAdvice(llm) {
     }
   }
 
-  // Bằng chứng hình ảnh từ Gemini
+  // -------------------------------------------------------
+  // Bằng chứng hình ảnh từ Gemini (giải thích TẠI SAO chẩn đoán đó)
+  // -------------------------------------------------------
   if (elements.diseaseEvidenceSection && elements.diseaseEvidence) {
     if (llm.disease_evidence) {
       elements.diseaseEvidence.textContent = llm.disease_evidence;
@@ -503,18 +620,12 @@ function renderAdvice(llm) {
     }
   }
 
-  // Khuyến nghị thêm
-  if (elements.recommendationsSection && elements.recommendations) {
-    const recs = llm.recommendations || [];
-    if (recs.length > 0) {
-      renderList(elements.recommendations, recs);
-      elements.recommendationsSection.style.display = "";
-    } else {
-      elements.recommendationsSection.style.display = "none";
-    }
-  }
 }
 
+// -------------------------------------------------------
+// renderList: render mảng chuỗi thành danh sách <li> trong <ul>
+// Dùng chung cho: care_steps, next_steps, prevention, recommendations...
+// -------------------------------------------------------
 function renderList(target, items) {
   if (!target) return;
   target.innerHTML = (items || [])
@@ -612,7 +723,6 @@ async function openQrModal() {
       cnn_label: cls.display_label || "-",
       cnn_conf: (cls.confidence || 0) * 100,
       health_score: llm.health_score || 50,
-      plant_type: llm.plant_type || "-",
       summary: llm.summary || "",
     };
 
