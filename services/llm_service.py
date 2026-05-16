@@ -1,7 +1,7 @@
 # ============================================================
 # File: services/llm_service.py
 # Vai trò: BƯỚC 3 trong pipeline — Sinh nội dung tư vấn bằng Gemini AI
-#
+# Xử lý Gemini, tạo chẩn đoán tổng hợp, giải thích, khuyến nghị, cảnh báo.
 # Luồng xử lý chính:
 #   1. Xây dựng prompt từ kết quả CNN + detection (YOLO)
 #   2. Gửi ảnh lá + prompt đến Gemini API (Google AI)

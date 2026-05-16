@@ -5,6 +5,7 @@
 #   Bước 1: YOLO phát hiện và crop vùng lá
 #   Bước 2: CNN phân loại nhóm bệnh từ ảnh crop
 #   Bước 3: Gemini tổng hợp kết quả và sinh nội dung tư vấn
+# Điều phối luồng: upload ảnh → YOLO → CNN → Gemini → trả kết quả.
 # Kết quả cuối được trả về cho Flask endpoint /api/analyze.
 # ============================================================
 

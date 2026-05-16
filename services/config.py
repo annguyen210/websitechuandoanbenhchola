@@ -2,7 +2,7 @@
 # File: services/config.py
 # Vai trò: Quản lý cấu hình toàn bộ ứng dụng
 # Đọc các biến môi trường từ file .env và tạo object Settings
-# dùng chung cho tất cả các service trong pipeline phân tích.
+# dùng chung cho tất cả các service trong pipeline phân tích.       
 # ============================================================
 
 import os

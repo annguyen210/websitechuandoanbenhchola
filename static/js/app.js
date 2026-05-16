@@ -1,7 +1,7 @@
 // ============================================================
 // File: static/js/app.js
 // Vai trò: Toàn bộ logic frontend của ứng dụng LeafAI
-//
+// Xử lý phía giao diện: gửi ảnh lên backend, nhận kết quả, hiển thị CNN/Gemini/report/QR.
 // Các chức năng chính:
 //   - Xử lý drag-and-drop và chọn file ảnh từ người dùng
 //   - Gọi API /api/analyze để gửi ảnh lên server phân tích

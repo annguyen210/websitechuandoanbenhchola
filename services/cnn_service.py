@@ -1,7 +1,9 @@
 # ============================================================
 # File: services/cnn_service.py
 # Vai trò: BƯỚC 2 trong pipeline — Phân loại nhóm bệnh lá bằng CNN
-#
+# Xử lý CNN, phân loại 5 nhóm bệnh, tính phần trăm, cảnh báo độ tin cậy.
+
+
 # Luồng xử lý chính:
 #   1. Nạp model EfficientNetB3 từ file model_0.h5
 #   2. Đọc ảnh lá (từ YOLO crop hoặc toàn ảnh gốc)

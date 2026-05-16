@@ -1,315 +1,470 @@
-<!DOCTYPE html>
+<!--Khung giao diện chính của phần mềm-->
+<!doctype html>
 <html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ app_name }}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/styles.css') }}"
+    />
+  </head>
 
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>{{ app_name }}</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap"
-    rel="stylesheet" />
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}" />
-</head>
-
-<body>
-  <div class="page-shell">
-    <header class="hero">
-      <div class="hero-copy">
-        <span class="eyebrow">YOLO -> CNN -> Gemini</span>
-        <h1>LeafAI</h1>
-        <p>
-          Tải ảnh lá cây, hệ thống sẽ tách vùng lá bằng YOLO, phân loại bằng CNN và
-          sinh tư vấn ngắn gọn bằng Gemini trên cùng một giao diện.
-        </p>
-        <div class="hero-badges">
-          <span>Thiết kế xanh lá</span>
-          <span>Dễ dùng cho người mới</span>
-          <span>Kết quả theo từng bước</span>
-        </div>
-      </div>
-      <div class="hero-panel">
-        <div class="mini-card">
-          <strong>Luồng xử lý</strong>
-          <ol>
-            <li>Phát hiện lá bằng module YOLO</li>
-            <li>Phân loại với `model_0.h5`</li>
-            <li>Tạo tư vấn với API Gemini</li>
-          </ol>
-        </div>
-      </div>
-    </header>
-
-    <main class="workspace">
-      <div class="message-banner hidden" id="messageBanner"></div>
-
-      <section class="card uploader-card">
-        <div class="section-head">
-          <div>
-            <p class="section-kicker">Bước 1</p>
-            <h2>Tải ảnh lá cây</h2>
-          </div>
-          <button class="ghost-button" id="resetButton" type="button">Đặt lại</button>
-        </div>
-
-        <label class="dropzone" id="dropzone" for="fileInput">
-          <input id="fileInput" type="file" accept="image/*" hidden />
-          <div class="dropzone-icon">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path
-                d="M12 3c4.8 0 8.7 3.9 8.7 8.7S16.8 20.4 12 20.4 3.3 16.5 3.3 11.7 7.2 3 12 3Zm0 2.2a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13Zm-.2 2.6c.6 0 1.1.5 1.1 1.1v2.2H15c.6 0 1.1.5 1.1 1.1s-.5 1.1-1.1 1.1h-2.1v2.1c0 .6-.5 1.1-1.1 1.1s-1.1-.5-1.1-1.1v-2.1H8.6c-.6 0-1.1-.5-1.1-1.1s.5-1.1 1.1-1.1h2.1V8.9c0-.6.5-1.1 1.1-1.1Z" />
-            </svg>
-          </div>
-          <strong>Kéo thả ảnh vào đây hoặc bấm để chọn ảnh</strong>
-          <span>Hỗ trợ JPG, PNG, WEBP. Nên dùng ảnh sáng rõ, thấy rõ phần lá.</span>
-        </label>
-
-        <div class="preview-shell">
-          <div class="preview-head">
-            <span>Ảnh đầu vào</span>
-            <span id="fileName">Chưa chọn ảnh</span>
-          </div>
-          <img id="previewImage" class="preview-image is-empty" alt="Xem trước ảnh lá cây" />
-        </div>
-
-        <div class="action-row">
-          <button id="analyzeButton" class="primary-button" type="button" disabled>
-            Phân tích ngay
-          </button>
-          <p class="helper-text">Khuyến nghị ảnh chỉ có 1 lá hoặc cụm lá chính.</p>
-        </div>
-      </section>
-
-      <section class="card status-card">
-        <div class="section-head">
-          <div>
-            <p class="section-kicker">Bước 2</p>
-            <h2>Trạng thái hệ thống</h2>
-          </div>
-          <span id="serverStatus" class="status-pill neutral">Đang kiểm tra</span>
-        </div>
-
-        <div class="health-grid">
-          <div class="health-item">
-            <span>YOLO</span>
-            <strong id="healthYolo">...</strong>
-          </div>
-          <div class="health-item">
-            <span>CNN</span>
-            <strong id="healthCnn">...</strong>
-          </div>
-          <div class="health-item">
-            <span>Nhãn CNN</span>
-            <strong id="healthLabels">...</strong>
-          </div>
-          <div class="health-item">
-            <span>Gemini API</span>
-            <strong id="healthGemini">...</strong>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <div class="hero-copy">
+          <span class="eyebrow">YOLO -> CNN -> Gemini</span>
+          <h1>LeafAI</h1>
+          <p>
+            Tải ảnh lá cây, hệ thống sẽ tách vùng lá bằng YOLO, phân loại bằng
+            CNN và sinh tư vấn ngắn gọn bằng Gemini trên cùng một giao diện.
+          </p>
+          <div class="hero-badges">
+            <span>Thiết kế xanh lá</span>
+            <span>Dễ dùng cho người mới</span>
+            <span>Kết quả theo từng bước</span>
           </div>
         </div>
-
-        <div id="pipelineList" class="pipeline-list"></div>
-      </section>
-
-      <section class="card results-card hidden" id="resultsCard">
-        <div class="section-head">
-          <div>
-            <p class="section-kicker">Kết quả</p>
-            <h2>Phân tích ảnh lá cây</h2>
+        <div class="hero-panel">
+          <div class="mini-card">
+            <strong>Luồng xử lý</strong>
+            <ol>
+              <li>Phát hiện lá bằng module YOLO</li>
+              <li>Phân loại với `model_0.h5`</li>
+              <li>Tạo tư vấn với API Gemini</li>
+            </ol>
           </div>
-          <span id="processingTime" class="status-pill success">0 ms</span>
         </div>
+      </header>
 
-        <div class="results-grid">
-          <article class="result-panel image-stack">
-            <div class="panel-head">
-              <h3>So sánh trực quan</h3>
-              <span>Ảnh gốc vs AI đánh dấu vùng bệnh</span>
+      <main class="workspace">
+        <div class="message-banner hidden" id="messageBanner"></div>
+
+        <section class="card uploader-card">
+          <div class="section-head">
+            <div>
+              <p class="section-kicker">Bước 1</p>
+              <h2>Tải ảnh lá cây</h2>
             </div>
-            <div class="comparison-view">
-              <div class="comparison-item">
-                <div class="comparison-label">Ảnh gốc</div>
-                <img id="resultOriginal" alt="Ảnh gốc" />
+            <button class="ghost-button" id="resetButton" type="button">
+              Đặt lại
+            </button>
+          </div>
+
+          <label class="dropzone" id="dropzone" for="fileInput">
+            <input id="fileInput" type="file" accept="image/*" hidden />
+            <div class="dropzone-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="M12 3c4.8 0 8.7 3.9 8.7 8.7S16.8 20.4 12 20.4 3.3 16.5 3.3 11.7 7.2 3 12 3Zm0 2.2a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13Zm-.2 2.6c.6 0 1.1.5 1.1 1.1v2.2H15c.6 0 1.1.5 1.1 1.1s-.5 1.1-1.1 1.1h-2.1v2.1c0 .6-.5 1.1-1.1 1.1s-1.1-.5-1.1-1.1v-2.1H8.6c-.6 0-1.1-.5-1.1-1.1s.5-1.1 1.1-1.1h2.1V8.9c0-.6.5-1.1 1.1-1.1Z"
+                />
+              </svg>
+            </div>
+            <strong>Kéo thả ảnh vào đây hoặc bấm để chọn ảnh</strong>
+            <span
+              >Hỗ trợ JPG, PNG, WEBP. Nên dùng ảnh sáng rõ, thấy rõ phần
+              lá.</span
+            >
+          </label>
+
+          <div class="preview-shell">
+            <div class="preview-head">
+              <span>Ảnh đầu vào</span>
+              <span id="fileName">Chưa chọn ảnh</span>
+            </div>
+            <img
+              id="previewImage"
+              class="preview-image is-empty"
+              alt="Xem trước ảnh lá cây"
+            />
+          </div>
+
+          <div class="action-row">
+            <button
+              id="analyzeButton"
+              class="primary-button"
+              type="button"
+              disabled
+            >
+              Phân tích ngay
+            </button>
+            <p class="helper-text">
+              Khuyến nghị ảnh chỉ có 1 lá hoặc cụm lá chính.
+            </p>
+          </div>
+        </section>
+
+        <section class="card status-card">
+          <div class="section-head">
+            <div>
+              <p class="section-kicker">Bước 2</p>
+              <h2>Trạng thái hệ thống</h2>
+            </div>
+            <span id="serverStatus" class="status-pill neutral"
+              >Đang kiểm tra</span
+            >
+          </div>
+
+          <div class="health-grid">
+            <div class="health-item">
+              <span>YOLO</span>
+              <strong id="healthYolo">...</strong>
+            </div>
+            <div class="health-item">
+              <span>CNN</span>
+              <strong id="healthCnn">...</strong>
+            </div>
+            <div class="health-item">
+              <span>Nhãn CNN</span>
+              <strong id="healthLabels">...</strong>
+            </div>
+            <div class="health-item">
+              <span>Gemini API</span>
+              <strong id="healthGemini">...</strong>
+            </div>
+          </div>
+
+          <div id="pipelineList" class="pipeline-list"></div>
+        </section>
+
+        <section class="card results-card hidden" id="resultsCard">
+          <div class="section-head">
+            <div>
+              <p class="section-kicker">Kết quả</p>
+              <h2>Phân tích ảnh lá cây</h2>
+            </div>
+            <span id="processingTime" class="status-pill success">0 ms</span>
+          </div>
+
+          <div class="results-grid">
+            <article class="result-panel image-stack">
+              <div class="panel-head">
+                <h3>So sánh trực quan</h3>
+                <span>Ảnh gốc vs AI đánh dấu vùng bệnh</span>
               </div>
-              <div class="comparison-arrow">→</div>
-              <div class="comparison-item">
-                <div class="comparison-label">AI đánh dấu</div>
-                <img id="resultAnnotated" alt="YOLO đánh dấu" />
-              </div>
-            </div>
-            <div class="triple-preview">
-              <figure>
-                <img id="resultCrop" alt="Ảnh crop lá" />
-                <figcaption>Ảnh đưa vào CNN</figcaption>
-              </figure>
-            </div>
-          </article>
-
-          <article class="result-panel">
-            <div class="panel-head">
-              <h3>Kết quả CNN</h3>
-              <span id="cnnHeadline">Chưa có dữ liệu</span>
-            </div>
-            <div class="metric-card">
-              <span>Lớp dự đoán cao nhất</span>
-              <strong id="cnnLabel">-</strong>
-              <small id="cnnConfidence">Độ tin cậy: -</small>
-            </div>
-            <div class="warning-box hidden" id="cnnWarning"></div>
-            <div class="prediction-list" id="predictionList"></div>
-          </article>
-
-          <article class="result-panel llm-panel">
-            <div class="panel-head">
-              <h3>Gợi ý từ hệ thống</h3>
-              <span id="llmSource">Nguồn: -</span>
-              <div id="healthScoreContainer" class="health-score-container hidden">
-                <label>Điểm sức khỏe cây:</label>
-                <div class="health-score-bar">
-                  <div id="healthScoreBar" class="health-score-fill"></div>
-                  <span id="healthScoreValue">50</span>
+              <div class="comparison-view">
+                <div class="comparison-item">
+                  <div class="comparison-label">Ảnh gốc</div>
+                  <img id="resultOriginal" alt="Ảnh gốc" />
+                </div>
+                <div class="comparison-arrow">→</div>
+                <div class="comparison-item">
+                  <div class="comparison-label">AI đánh dấu</div>
+                  <img id="resultAnnotated" alt="YOLO đánh dấu" />
                 </div>
               </div>
-            </div>
-            <div id="diagnosisBadge" style="display:none;padding:0.6rem 0.75rem;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;margin-bottom:0.75rem;flex-wrap:wrap;align-items:center;gap:0.5rem;">
-              <span style="font-size:0.8rem;color:#374151;">Chẩn đoán tổng hợp:</span>
-              <strong id="finalDiagnosis" style="font-size:0.9rem;color:#15803d;">-</strong>
-              <span id="cnnAgreementBadge" style="font-size:.72rem;padding:2px 8px;border-radius:12px;font-weight:600;">-</span>
-            </div>
-            <div class="llm-block">
-              <strong id="llmHeadline">-</strong>
-              <p id="llmSummary">-</p>
-              <div id="diseaseEvidenceSection" style="display:none;margin-top:0.75rem;padding:0.6rem 0.75rem;background:#fffbeb;border-left:3px solid #f59e0b;border-radius:0 6px 6px 0;">
-                <h4 style="font-size:0.8rem;font-weight:700;color:#92400e;margin:0 0 0.3rem 0;">Bằng chứng hình ảnh (Gemini):</h4>
-                <p id="diseaseEvidence" style="font-size:0.85rem;color:#374151;margin:0;"></p>
+              <div class="triple-preview">
+                <figure>
+                  <img id="resultCrop" alt="Ảnh crop lá" />
+                  <figcaption>Ảnh đưa vào CNN</figcaption>
+                </figure>
               </div>
-            </div>
-            <div class="llm-columns">
-              <div>
-                <h4>Cách xử lý đề xuất</h4>
-                <ul id="careSteps"></ul>
-              </div>
-              <div>
-                <h4>Theo dõi tiếp</h4>
-                <ul id="nextSteps"></ul>
-              </div>
-            </div>
-            <div class="warning-box" id="llmWarning">-</div>
-            <div id="additionalInfo" class="additional-info">
+            </article>
 
-              <!-- Quan sát trực quan từ Gemini khi phân tích ảnh -->
-              <div class="info-section" id="visualObsSection" style="display:none;">
-                <h4>Quan sát hình ảnh (Gemini):</h4>
-                <ul id="visualObservations"></ul>
+            <article class="result-panel">
+              <div class="panel-head">
+                <h3>Kết quả CNN</h3>
+                <span id="cnnHeadline">Chưa có dữ liệu</span>
               </div>
+              <div class="metric-card">
+                <span>Lớp dự đoán cao nhất</span>
+                <strong id="cnnLabel">-</strong>
+                <small id="cnnConfidence">Độ tin cậy: -</small>
+              </div>
+              <div class="warning-box hidden" id="cnnWarning"></div>
+              <div class="prediction-list" id="predictionList"></div>
+            </article>
 
-              <!-- Nguyên nhân gây bệnh — luôn hiển thị -->
-              <div class="info-section">
-                <h4>Nguyên nhân gây bệnh:</h4>
-                <p id="causesText" style="color:#374151;line-height:1.7;">-</p>
+            <article class="result-panel llm-panel">
+              <div class="panel-head">
+                <h3>Gợi ý từ hệ thống</h3>
+                <span id="llmSource">Nguồn: -</span>
+                <div
+                  id="healthScoreContainer"
+                  class="health-score-container hidden"
+                >
+                  <label>Điểm sức khỏe cây:</label>
+                  <div class="health-score-bar">
+                    <div id="healthScoreBar" class="health-score-fill"></div>
+                    <span id="healthScoreValue">50</span>
+                  </div>
+                </div>
               </div>
+              <div
+                id="diagnosisBadge"
+                style="
+                  display: none;
+                  padding: 0.6rem 0.75rem;
+                  background: #f0fdf4;
+                  border: 1px solid #bbf7d0;
+                  border-radius: 8px;
+                  margin-bottom: 0.75rem;
+                  flex-wrap: wrap;
+                  align-items: center;
+                  gap: 0.5rem;
+                "
+              >
+                <span style="font-size: 0.8rem; color: #374151"
+                  >Chẩn đoán tổng hợp:</span
+                >
+                <strong
+                  id="finalDiagnosis"
+                  style="font-size: 0.9rem; color: #15803d"
+                  >-</strong
+                >
+                <span
+                  id="cnnAgreementBadge"
+                  style="
+                    font-size: 0.72rem;
+                    padding: 2px 8px;
+                    border-radius: 12px;
+                    font-weight: 600;
+                  "
+                  >-</span
+                >
+              </div>
+              <div class="llm-block">
+                <strong id="llmHeadline">-</strong>
+                <p id="llmSummary">-</p>
+                <div
+                  id="diseaseEvidenceSection"
+                  style="
+                    display: none;
+                    margin-top: 0.75rem;
+                    padding: 0.6rem 0.75rem;
+                    background: #fffbeb;
+                    border-left: 3px solid #f59e0b;
+                    border-radius: 0 6px 6px 0;
+                  "
+                >
+                  <h4
+                    style="
+                      font-size: 0.8rem;
+                      font-weight: 700;
+                      color: #92400e;
+                      margin: 0 0 0.3rem 0;
+                    "
+                  >
+                    Bằng chứng hình ảnh (Gemini):
+                  </h4>
+                  <p
+                    id="diseaseEvidence"
+                    style="font-size: 0.85rem; color: #374151; margin: 0"
+                  ></p>
+                </div>
+              </div>
+              <div class="llm-columns">
+                <div>
+                  <h4>Cách xử lý đề xuất</h4>
+                  <ul id="careSteps"></ul>
+                </div>
+                <div>
+                  <h4>Theo dõi tiếp</h4>
+                  <ul id="nextSteps"></ul>
+                </div>
+              </div>
+              <div class="warning-box" id="llmWarning">-</div>
+              <div id="additionalInfo" class="additional-info">
+                <!-- Quan sát trực quan từ Gemini khi phân tích ảnh -->
+                <div
+                  class="info-section"
+                  id="visualObsSection"
+                  style="display: none"
+                >
+                  <h4>Quan sát hình ảnh (Gemini):</h4>
+                  <ul id="visualObservations"></ul>
+                </div>
 
-              <!-- Điều kiện thuận lợi — luôn hiển thị -->
-              <div class="info-section">
-                <h4>Điều kiện thuận lợi phát sinh:</h4>
-                <p id="favorableConditions" style="color:#374151;line-height:1.7;">-</p>
-              </div>
+                <!-- Nguyên nhân gây bệnh — luôn hiển thị -->
+                <div class="info-section">
+                  <h4>Nguyên nhân gây bệnh:</h4>
+                  <p id="causesText" style="color: #374151; line-height: 1.7">
+                    -
+                  </p>
+                </div>
 
-              <!-- Biện pháp phòng ngừa — luôn hiển thị -->
-              <div class="info-section">
-                <h4>Biện pháp phòng ngừa:</h4>
-                <ul id="preventionList"></ul>
-              </div>
+                <!-- Điều kiện thuận lợi — luôn hiển thị -->
+                <div class="info-section">
+                  <h4>Điều kiện thuận lợi phát sinh:</h4>
+                  <p
+                    id="favorableConditions"
+                    style="color: #374151; line-height: 1.7"
+                  >
+                    -
+                  </p>
+                </div>
 
-              <!-- Khuyến nghị bổ sung — luôn hiển thị -->
-              <div class="info-section">
-                <h4>Khuyến nghị thêm:</h4>
-                <ul id="recommendations"></ul>
-              </div>
+                <!-- Biện pháp phòng ngừa — luôn hiển thị -->
+                <div class="info-section">
+                  <h4>Biện pháp phòng ngừa:</h4>
+                  <ul id="preventionList"></ul>
+                </div>
 
-              <!-- Giai đoạn bệnh -->
-              <div class="info-section" id="diseaseStageSection" style="display:none;">
-                <h4>Giai đoạn bệnh hiện tại:</h4>
-                <p id="diseaseStageText" style="color:#374151;line-height:1.7;">-</p>
-              </div>
+                <!-- Khuyến nghị bổ sung — luôn hiển thị -->
+                <div class="info-section">
+                  <h4>Khuyến nghị thêm:</h4>
+                  <ul id="recommendations"></ul>
+                </div>
 
-              <!-- Bộ phận lá bị ảnh hưởng -->
-              <div class="info-section" id="affectedPartsSection" style="display:none;">
-                <h4>Bộ phận bị ảnh hưởng:</h4>
-                <ul id="affectedPartsList"></ul>
-              </div>
+                <!-- Giai đoạn bệnh -->
+                <div
+                  class="info-section"
+                  id="diseaseStageSection"
+                  style="display: none"
+                >
+                  <h4>Giai đoạn bệnh hiện tại:</h4>
+                  <p
+                    id="diseaseStageText"
+                    style="color: #374151; line-height: 1.7"
+                  >
+                    -
+                  </p>
+                </div>
 
-              <!-- Sản phẩm/thuốc điều trị khuyến nghị -->
-              <div class="info-section" id="recommendedProductsSection" style="display:none;">
-                <h4>Sản phẩm / thuốc điều trị khuyến nghị:</h4>
-                <ul id="recommendedProductsList"></ul>
-              </div>
+                <!-- Bộ phận lá bị ảnh hưởng -->
+                <div
+                  class="info-section"
+                  id="affectedPartsSection"
+                  style="display: none"
+                >
+                  <h4>Bộ phận bị ảnh hưởng:</h4>
+                  <ul id="affectedPartsList"></ul>
+                </div>
 
-              <!-- Mức độ lây lan và ảnh hưởng kinh tế -->
-              <div class="info-section">
-                <h4>Mức độ lây lan:</h4>
-                <p id="spreadLevel">-</p>
-              </div>
-              <div class="info-section">
-                <h4>Ảnh hưởng kinh tế:</h4>
-                <p id="economicImpact">-</p>
-              </div>
+                <!-- Sản phẩm/thuốc điều trị khuyến nghị -->
+                <div
+                  class="info-section"
+                  id="recommendedProductsSection"
+                  style="display: none"
+                >
+                  <h4>Sản phẩm / thuốc điều trị khuyến nghị:</h4>
+                  <ul id="recommendedProductsList"></ul>
+                </div>
 
-              <!-- Lịch điều trị theo mốc ngày -->
-              <div class="info-section">
-                <h4>Lịch điều trị:</h4>
-                <ul id="treatmentSchedule"></ul>
-              </div>
+                <!-- Mức độ lây lan và ảnh hưởng kinh tế -->
+                <div class="info-section">
+                  <h4>Mức độ lây lan:</h4>
+                  <p id="spreadLevel">-</p>
+                </div>
+                <div class="info-section">
+                  <h4>Ảnh hưởng kinh tế:</h4>
+                  <p id="economicImpact">-</p>
+                </div>
 
-              <!-- Dự báo diễn biến bệnh nếu không xử lý -->
-              <div class="info-section">
-                <h4>Dự báo diễn biến bệnh:</h4>
-                <div id="diseaseProgression"></div>
-              </div>
+                <!-- Lịch điều trị theo mốc ngày -->
+                <div class="info-section">
+                  <h4>Lịch điều trị:</h4>
+                  <ul id="treatmentSchedule"></ul>
+                </div>
 
-            </div>
-            <div class="action-buttons">
-              <button id="shareReportBtn" class="secondary-button btn-report" type="button">
-                <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
-                Tải báo cáo
-              </button>
-              <button id="qrCodeBtn" class="secondary-button btn-qr" type="button">
-                <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M3 4a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1H4a1 1 0 01-1-1V4zm2 2V5h1v1H5zM3 13a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1H4a1 1 0 01-1-1v-3zm2 2v-1h1v1H5zM13 3a1 1 0 00-1 1v3a1 1 0 001 1h3a1 1 0 001-1V4a1 1 0 00-1-1h-3zm1 2v1h1V5h-1zM11 13a1 1 0 100 2h1v1a1 1 0 102 0v-1h1a1 1 0 100-2h-1v-1a1 1 0 10-2 0v1h-1zm4 1v1h-1v-1h1z" clip-rule="evenodd"/></svg>
-                Mã QR Code
-              </button>
-            </div>
-          </article>
+                <!-- Dự báo diễn biến bệnh nếu không xử lý -->
+                <div class="info-section">
+                  <h4>Dự báo diễn biến bệnh:</h4>
+                  <div id="diseaseProgression"></div>
+                </div>
+              </div>
+              <div class="action-buttons">
+                <button
+                  id="shareReportBtn"
+                  class="secondary-button btn-report"
+                  type="button"
+                >
+                  <svg
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path
+                      fill-rule="evenodd"
+                      d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z"
+                      clip-rule="evenodd"
+                    />
+                  </svg>
+                  Tải báo cáo
+                </button>
+                <button
+                  id="qrCodeBtn"
+                  class="secondary-button btn-qr"
+                  type="button"
+                >
+                  <svg
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path
+                      fill-rule="evenodd"
+                      d="M3 4a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1H4a1 1 0 01-1-1V4zm2 2V5h1v1H5zM3 13a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1H4a1 1 0 01-1-1v-3zm2 2v-1h1v1H5zM13 3a1 1 0 00-1 1v3a1 1 0 001 1h3a1 1 0 001-1V4a1 1 0 00-1-1h-3zm1 2v1h1V5h-1zM11 13a1 1 0 100 2h1v1a1 1 0 102 0v-1h1a1 1 0 100-2h-1v-1a1 1 0 10-2 0v1h-1zm4 1v1h-1v-1h1z"
+                      clip-rule="evenodd"
+                    />
+                  </svg>
+                  Mã QR Code
+                </button>
+              </div>
+            </article>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <!-- QR Code Modal -->
+    <div
+      id="qrModal"
+      class="modal-overlay hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="qrModalTitle"
+    >
+      <div class="modal-box">
+        <div class="modal-header">
+          <h3 id="qrModalTitle">Mã QR – Kết quả chẩn đoán</h3>
+          <button
+            id="qrModalClose"
+            class="modal-close"
+            type="button"
+            aria-label="Đóng"
+          >
+            &times;
+          </button>
         </div>
-      </section>
-    </main>
-  </div>
-
-  <!-- QR Code Modal -->
-  <div id="qrModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="qrModalTitle">
-    <div class="modal-box">
-      <div class="modal-header">
-        <h3 id="qrModalTitle">Mã QR – Kết quả chẩn đoán</h3>
-        <button id="qrModalClose" class="modal-close" type="button" aria-label="Đóng">&times;</button>
-      </div>
-      <div class="modal-body">
-        <div id="qrLoading" class="qr-loading">
-          <div class="spinner"></div>
-          <p>Đang tạo mã QR...</p>
+        <div class="modal-body">
+          <div id="qrLoading" class="qr-loading">
+            <div class="spinner"></div>
+            <p>Đang tạo mã QR...</p>
+          </div>
+          <div id="qrContent" class="qr-content hidden">
+            <img id="qrImage" alt="Mã QR chẩn đoán" />
+            <p class="qr-hint">
+              Quét mã QR để xem tóm tắt chẩn đoán ngay trên điện thoại
+            </p>
+            <div id="qrText" class="qr-text-preview"></div>
+          </div>
         </div>
-        <div id="qrContent" class="qr-content hidden">
-          <img id="qrImage" alt="Mã QR chẩn đoán" />
-          <p class="qr-hint">Quét mã QR để xem tóm tắt chẩn đoán ngay trên điện thoại</p>
-          <div id="qrText" class="qr-text-preview"></div>
+        <div class="modal-footer">
+          <button
+            id="qrDownloadBtn"
+            class="primary-button"
+            type="button"
+            style="min-width: 160px"
+            disabled
+          >
+            Tải ảnh QR
+          </button>
+          <button id="qrCloseBtn" class="ghost-button" type="button">
+            Đóng
+          </button>
         </div>
-      </div>
-      <div class="modal-footer">
-        <button id="qrDownloadBtn" class="primary-button" type="button" style="min-width:160px;" disabled>Tải ảnh QR</button>
-        <button id="qrCloseBtn" class="ghost-button" type="button">Đóng</button>
       </div>
     </div>
-  </div>
 
-  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
-</body>
-
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+  </body>
 </html>

@@ -1,7 +1,9 @@
 # ============================================================
 # File: app.py
 # Vai trò: Entry point của ứng dụng Flask — định nghĩa tất cả HTTP endpoints
-#
+# File chạy Flask, nhận upload ảnh, gọi API phân tích, tạo report, tạo QR.
+
+
 # Các endpoint chính:
 #   GET  /              → Trang chủ (giao diện người dùng)
 #   GET  /api/health    → Kiểm tra trạng thái server và các dependency

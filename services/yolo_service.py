@@ -4,6 +4,7 @@
 # Dùng model YOLO (best.pt) để tìm bounding box của lá cây
 # trong ảnh upload, sau đó crop và lưu vùng lá đó để CNN xử lý.
 # Nếu YOLO không tìm thấy lá, dùng toàn bộ ảnh gốc (fallback).
+#  Xử lý YOLO, tìm vùng lá, crop ảnh lá để đưa sang CNN.
 # ============================================================
 
 from __future__ import annotations
